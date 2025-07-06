@@ -7,6 +7,8 @@ import '../services/card_service.dart';
 import '../constants/theme.dart';
 import '../widgets/inventory_widget.dart';
 import 'card_editor_screen.dart';
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
@@ -346,25 +348,48 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 if (character.availableStatPoints > 0)
-                  Text(
-                    'Available Points: ${character.availableStatPoints}',
-                    style: const TextStyle(
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
                       color: RealmOfValorTheme.experienceGreen,
-                      fontWeight: FontWeight.bold,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Points: ${character.availableStatPoints}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
               ],
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(child: _buildStatColumn('Strength', character.totalStrength)),
-                Expanded(child: _buildStatColumn('Dexterity', character.totalDexterity)),
-                Expanded(child: _buildStatColumn('Vitality', character.totalVitality)),
-                Expanded(child: _buildStatColumn('Energy', character.totalEnergy)),
-              ],
-            ),
+            
+            // Primary Stats with allocation buttons
+            if (character.availableStatPoints > 0) ...[
+              _buildStatRowWithButton('Strength', character.allocatedStrength, character.totalStrength, 'strength'),
+              const SizedBox(height: 8),
+              _buildStatRowWithButton('Dexterity', character.allocatedDexterity, character.totalDexterity, 'dexterity'),
+              const SizedBox(height: 8),
+              _buildStatRowWithButton('Vitality', character.allocatedVitality, character.totalVitality, 'vitality'),
+              const SizedBox(height: 8),
+              _buildStatRowWithButton('Energy', character.allocatedEnergy, character.totalEnergy, 'energy'),
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(child: _buildStatColumn('Strength', character.totalStrength)),
+                  Expanded(child: _buildStatColumn('Dexterity', character.totalDexterity)),
+                  Expanded(child: _buildStatColumn('Vitality', character.totalVitality)),
+                  Expanded(child: _buildStatColumn('Energy', character.totalEnergy)),
+                ],
+              ),
+            ],
+            
             const SizedBox(height: 16),
+            
+            // Derived Stats
             Row(
               children: [
                 Expanded(child: _buildStatColumn('Attack', character.attackRating)),
@@ -377,6 +402,83 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
     );
+  }
+
+  Widget _buildStatRowWithButton(String statName, int baseValue, int totalValue, String statKey) {
+    final equipmentBonus = totalValue - baseValue;
+    
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: Text(
+            statName,
+            style: const TextStyle(
+              color: RealmOfValorTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        Expanded(
+          flex: 2,
+          child: Row(
+            children: [
+              Text(
+                baseValue.toString(),
+                style: const TextStyle(
+                  color: RealmOfValorTheme.textPrimary,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              if (equipmentBonus > 0) ...[
+                const Text(
+                  ' + ',
+                  style: TextStyle(color: RealmOfValorTheme.experienceGreen),
+                ),
+                Text(
+                  equipmentBonus.toString(),
+                  style: const TextStyle(
+                    color: RealmOfValorTheme.experienceGreen,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          flex: 1,
+          child: Text(
+            '= $totalValue',
+            style: const TextStyle(
+              color: RealmOfValorTheme.accentGold,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        IconButton(
+          onPressed: () => _allocateStatPoint(statKey),
+          icon: const Icon(Icons.add_circle, color: RealmOfValorTheme.accentGold),
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          padding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
+  void _allocateStatPoint(String statName) {
+    final characterProvider = context.read<CharacterProvider>();
+    characterProvider.allocateStatPoint(statName).then((success) {
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Allocated 1 point to ${statName.toUpperCase()}!'),
+            backgroundColor: RealmOfValorTheme.experienceGreen,
+            duration: const Duration(seconds: 1),
+          ),
+        );
+      }
+    });
   }
 
   Widget _buildStatColumn(String label, dynamic value) {
@@ -456,30 +558,185 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMapTab() {
-    return const Center(
+    return Padding(
+      padding: const EdgeInsets.all(16),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            Icons.map,
-            size: 64,
-            color: RealmOfValorTheme.textSecondary,
-          ),
-          SizedBox(height: 16),
-          Text(
-            'Map Feature',
+          const Text(
+            'Adventure Map',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: RealmOfValorTheme.textPrimary,
+              color: RealmOfValorTheme.accentGold,
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            'Coming Soon!',
-            style: TextStyle(
-              fontSize: 16,
-              color: RealmOfValorTheme.textSecondary,
+          const SizedBox(height: 16),
+          
+          // Map Header
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Row(
+                children: [
+                  const Icon(Icons.explore, color: RealmOfValorTheme.accentGold, size: 32),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Explore the Realm',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: RealmOfValorTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Consumer<CharacterProvider>(
+                          builder: (context, provider, child) {
+                            final character = provider.currentCharacter;
+                            return Text(
+                              character != null 
+                                  ? 'Current Location: Adventure Town'
+                                  : 'Select a character to explore',
+                              style: const TextStyle(
+                                color: RealmOfValorTheme.textSecondary,
+                              ),
+                            );
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          
+          const SizedBox(height: 16),
+          
+          // Available Adventures
+          Expanded(
+            child: Consumer<CharacterProvider>(
+              builder: (context, characterProvider, child) {
+                final character = characterProvider.currentCharacter;
+                
+                if (character == null) {
+                  return const Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.person_outline,
+                          size: 64,
+                          color: RealmOfValorTheme.textSecondary,
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'Create a character to explore!',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: RealmOfValorTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+                
+                return ListView(
+                  children: [
+                    const Text(
+                      'Available Adventures',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: RealmOfValorTheme.accentGold,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    _buildAdventureCard(
+                      'Enchanted Forest',
+                      'A mystical forest filled with magical creatures and hidden treasures.',
+                      Icons.forest,
+                      character.level >= 1,
+                      'Level 1+',
+                      () => _startAdventure('Enchanted Forest', character),
+                    ),
+                    
+                    _buildAdventureCard(
+                      'Crystal Caves',
+                      'Deep underground caverns with rare crystals and dangerous monsters.',
+                      Icons.terrain,
+                      character.level >= 5,
+                      'Level 5+',
+                      () => _startAdventure('Crystal Caves', character),
+                    ),
+                    
+                    _buildAdventureCard(
+                      'Sky Temple',
+                      'An ancient temple floating in the clouds, home to powerful artifacts.',
+                      Icons.temple_buddhist,
+                      character.level >= 10,
+                      'Level 10+',
+                      () => _startAdventure('Sky Temple', character),
+                    ),
+                    
+                    _buildAdventureCard(
+                      'Dragon\'s Lair',
+                      'The ultimate challenge - face the ancient dragon and claim its hoard.',
+                      Icons.whatshot,
+                      character.level >= 20,
+                      'Level 20+',
+                      () => _startAdventure('Dragon\'s Lair', character),
+                    ),
+                    
+                    const SizedBox(height: 24),
+                    
+                    // QR Code Adventure
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.qr_code_scanner,
+                              size: 48,
+                              color: RealmOfValorTheme.accentGold,
+                            ),
+                            const SizedBox(height: 16),
+                            const Text(
+                              'Scan for Adventure',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: RealmOfValorTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Scan QR codes in the real world to discover hidden adventures!',
+                              style: TextStyle(
+                                color: RealmOfValorTheme.textSecondary,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 16),
+                            ElevatedButton.icon(
+                              onPressed: () => _scanQRCode(),
+                              icon: const Icon(Icons.camera_alt),
+                              label: const Text('Scan QR Code'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
         ],
@@ -487,35 +744,252 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildSettingsTab() {
-    return const Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.settings,
-            size: 64,
-            color: RealmOfValorTheme.textSecondary,
+  Widget _buildAdventureCard(
+    String name,
+    String description,
+    IconData icon,
+    bool isUnlocked,
+    String requirement,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      child: ListTile(
+        leading: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            color: isUnlocked ? RealmOfValorTheme.accentGold : RealmOfValorTheme.surfaceLight,
+            borderRadius: BorderRadius.circular(8),
           ),
-          SizedBox(height: 16),
-          Text(
+          child: Icon(
+            icon,
+            color: isUnlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
+          ),
+        ),
+        title: Text(
+          name,
+          style: TextStyle(
+            color: isUnlocked ? RealmOfValorTheme.textPrimary : RealmOfValorTheme.textSecondary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              description,
+              style: TextStyle(
+                color: isUnlocked ? RealmOfValorTheme.textSecondary : RealmOfValorTheme.textSecondary.withOpacity(0.7),
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              requirement,
+              style: TextStyle(
+                color: isUnlocked ? RealmOfValorTheme.experienceGreen : RealmOfValorTheme.healthRed,
+                fontSize: 12,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        trailing: isUnlocked 
+            ? const Icon(Icons.play_arrow, color: RealmOfValorTheme.accentGold)
+            : const Icon(Icons.lock, color: RealmOfValorTheme.textSecondary),
+        onTap: isUnlocked ? onTap : null,
+      ),
+    );
+  }
+
+  void _startAdventure(String adventureName, GameCharacter character) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Start Adventure: $adventureName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.explore,
+              size: 64,
+              color: RealmOfValorTheme.accentGold,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Are you ready to embark on this adventure with ${character.name}?',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: RealmOfValorTheme.textPrimary),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Adventure features coming soon! For now, enjoy some bonus experience.',
+              style: TextStyle(
+                color: RealmOfValorTheme.textSecondary,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              // Give some bonus experience for now
+              final characterProvider = context.read<CharacterProvider>();
+              characterProvider.addExperience(100);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Adventure completed! Gained 100 XP!'),
+                  backgroundColor: RealmOfValorTheme.experienceGreen,
+                ),
+              );
+            },
+            child: const Text('Start Adventure'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSettingsTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
             'Settings',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: RealmOfValorTheme.textPrimary,
+              color: RealmOfValorTheme.accentGold,
             ),
           ),
-          SizedBox(height: 8),
-          Text(
-            'Coming Soon!',
-            style: TextStyle(
-              fontSize: 16,
-              color: RealmOfValorTheme.textSecondary,
+          const SizedBox(height: 24),
+          
+          Expanded(
+            child: ListView(
+              children: [
+                // Character Management Section
+                _buildSettingsSection(
+                  'Character Management',
+                  [
+                    _buildSettingsTile(
+                      'Export Character Data',
+                      'Backup your character progress',
+                      Icons.upload,
+                      () => _exportCharacterData(),
+                    ),
+                    _buildSettingsTile(
+                      'Import Character Data',
+                      'Restore character from backup',
+                      Icons.download,
+                      () => _importCharacterData(),
+                    ),
+                    _buildSettingsTile(
+                      'Reset Character',
+                      'Reset current character progress',
+                      Icons.refresh,
+                      () => _resetCharacter(),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // Card Management Section
+                _buildSettingsSection(
+                  'Card Management',
+                  [
+                    _buildSettingsTile(
+                      'Export Cards',
+                      'Backup your card collection',
+                      Icons.style,
+                      () => _exportCards(),
+                    ),
+                    _buildSettingsTile(
+                      'Import Cards',
+                      'Import card collection',
+                      Icons.library_add,
+                      () => _importCards(),
+                    ),
+                    _buildSettingsTile(
+                      'Generate Sample Cards',
+                      'Add sample cards for testing',
+                      Icons.auto_fix_high,
+                      () => _generateSampleCards(),
+                    ),
+                  ],
+                ),
+                
+                const SizedBox(height: 24),
+                
+                // App Settings Section
+                _buildSettingsSection(
+                  'App Settings',
+                  [
+                    _buildSettingsTile(
+                      'Clear All Data',
+                      'Reset app to initial state',
+                      Icons.delete_forever,
+                      () => _clearAllData(),
+                    ),
+                    _buildSettingsTile(
+                      'App Info',
+                      'Version and build information',
+                      Icons.info,
+                      () => _showAppInfo(),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSettingsSection(String title, List<Widget> children) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: RealmOfValorTheme.accentGold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Card(
+          child: Column(
+            children: children,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSettingsTile(String title, String subtitle, IconData icon, VoidCallback onTap) {
+    return ListTile(
+      leading: Icon(icon, color: RealmOfValorTheme.accentGold),
+      title: Text(
+        title,
+        style: const TextStyle(color: RealmOfValorTheme.textPrimary),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(color: RealmOfValorTheme.textSecondary),
+      ),
+      trailing: const Icon(Icons.chevron_right, color: RealmOfValorTheme.textSecondary),
+      onTap: onTap,
     );
   }
 
@@ -940,6 +1414,325 @@ class _HomeScreenState extends State<HomeScreen> {
       SnackBar(
         content: Text('Scanned and added: ${randomCard.name}'),
         backgroundColor: RealmOfValorTheme.experienceGreen,
+      ),
+    );
+  }
+
+  void _exportCharacterData() {
+    final characterProvider = context.read<CharacterProvider>();
+    final character = characterProvider.currentCharacter;
+    
+    if (character == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No character selected to export')),
+      );
+      return;
+    }
+    
+    final jsonData = character.toJson();
+    final jsonString = jsonEncode(jsonData);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Export Character Data'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Character data exported successfully!'),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: RealmOfValorTheme.surfaceLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                jsonString,
+                style: const TextStyle(fontSize: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _importCharacterData() {
+    final controller = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import Character Data'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Paste character JSON data:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Paste JSON data here...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              try {
+                final jsonData = jsonDecode(controller.text);
+                final character = GameCharacter.fromJson(jsonData);
+                context.read<CharacterProvider>().createCharacter(character);
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Character imported successfully!')),
+                );
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Import failed: ${e.toString()}')),
+                );
+              }
+            },
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _resetCharacter() {
+    final characterProvider = context.read<CharacterProvider>();
+    final character = characterProvider.currentCharacter;
+    
+    if (character == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No character selected to reset')),
+      );
+      return;
+    }
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Reset Character'),
+        content: Text('Are you sure you want to reset ${character.name}? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: RealmOfValorTheme.healthRed),
+            onPressed: () {
+              final resetCharacter = GameCharacter(
+                id: character.id,
+                name: character.name,
+                characterClass: character.characterClass,
+                availableStatPoints: 5,
+                availableSkillPoints: 1,
+              );
+              characterProvider.updateCharacter(resetCharacter);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Character reset successfully!')),
+              );
+            },
+            child: const Text('Reset'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _exportCards() {
+    final cardService = context.read<CardService>();
+    final exportData = cardService.exportCards();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Export Cards'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Card collection exported successfully!'),
+            const SizedBox(height: 16),
+            Container(
+              height: 200,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: RealmOfValorTheme.surfaceLight,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  exportData,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _importCards() {
+    final controller = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Import Cards'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Paste card collection JSON data:'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: controller,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                border: OutlineInputBorder(),
+                hintText: 'Paste JSON data here...',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final cardService = context.read<CardService>();
+              final success = await cardService.importCards(controller.text);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(success ? 'Cards imported successfully!' : 'Import failed!'),
+                ),
+              );
+            },
+            child: const Text('Import'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _generateSampleCards() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Generate Sample Cards'),
+        content: const Text('This will create sample cards for testing. Continue?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final cardService = context.read<CardService>();
+              
+              // Generate sample cards
+              for (int i = 0; i < 10; i++) {
+                final randomCard = cardService.generateRandomCard();
+                await cardService.createCard(randomCard);
+              }
+              
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Sample cards generated successfully!')),
+              );
+            },
+            child: const Text('Generate'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _clearAllData() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Data'),
+        content: const Text('This will delete ALL characters and cards. This action cannot be undone!'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: RealmOfValorTheme.healthRed),
+            onPressed: () async {
+              final prefs = context.read<SharedPreferences>();
+              await prefs.clear();
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('All data cleared! Please restart the app.')),
+              );
+            },
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAppInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('App Information'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Realm of Valor', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            SizedBox(height: 8),
+            Text('Version: 1.0.0'),
+            Text('Build: 1'),
+            SizedBox(height: 16),
+            Text('A hybrid card-based RPG combining Diablo II mechanics with Adventure Time aesthetics.'),
+            SizedBox(height: 16),
+            Text('Features:'),
+            Text('• Character progression system'),
+            Text('• Inventory management'),
+            Text('• Card creation tools'),
+            Text('• QR code integration'),
+            Text('• Cross-platform support'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }

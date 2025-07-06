@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/card_model.dart';
 
 class RealmOfValorTheme {
   // Primary Colors - Dark whimsical theme
@@ -254,8 +255,15 @@ class RealmOfValorTheme {
   }
   
   // Helper methods for rarity colors
-  static Color getRarityColor(String rarity) {
-    switch (rarity.toLowerCase()) {
+  static Color getRarityColor(dynamic rarity) {
+    String rarityString;
+    if (rarity is CardRarity) {
+      rarityString = rarity.name;
+    } else {
+      rarityString = rarity.toString();
+    }
+    
+    switch (rarityString.toLowerCase()) {
       case 'common':
         return rarityCommon;
       case 'uncommon':
@@ -298,7 +306,7 @@ class RealmOfValorTheme {
     border: Border.all(color: accentGold, width: 2),
   );
   
-  static BoxDecoration rarityCardDecoration(String rarity) => BoxDecoration(
+  static BoxDecoration rarityCardDecoration(dynamic rarity) => BoxDecoration(
     color: surfaceMedium,
     borderRadius: BorderRadius.circular(12),
     border: Border.all(color: getRarityColor(rarity), width: 2),
