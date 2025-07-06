@@ -13,11 +13,42 @@ class CharacterProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   
+  // NEW: Activity tracking
+  final List<ActivityEntry> _recentActivity = [];
+  
+  // NEW: Level-up detection
+  bool _hasLeveledUp = false;
+  int _previousLevel = 0;
+  
   // Getters
   List<GameCharacter> get characters => _characters;
   GameCharacter? get selectedCharacter => _selectedCharacter;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  List<ActivityEntry> get recentActivity => List.unmodifiable(_recentActivity.reversed.take(10));
+  bool get hasLeveledUp => _hasLeveledUp;
+  
+  void clearLevelUpFlag() {
+    _hasLeveledUp = false;
+    notifyListeners();
+  }
+  
+  void _addActivity(String action, String icon, {String? details}) {
+    final activity = ActivityEntry(
+      action: action,
+      icon: icon,
+      timestamp: DateTime.now(),
+      details: details,
+    );
+    _recentActivity.add(activity);
+    
+    // Keep only last 20 activities
+    if (_recentActivity.length > 20) {
+      _recentActivity.removeAt(0);
+    }
+    
+    notifyListeners();
+  }
   
   /// Sets loading state
   void _setLoading(bool loading) {
@@ -49,6 +80,8 @@ class CharacterProvider extends ChangeNotifier {
   /// Selects a character
   void selectCharacter(GameCharacter character) {
     _selectedCharacter = character;
+    _previousLevel = character.level;
+    _addActivity('Switched to ${character.name}', 'swap_horiz');
     notifyListeners();
   }
   
@@ -60,6 +93,8 @@ class CharacterProvider extends ChangeNotifier {
     try {
       final characterId = await _characterService.createCharacter(character);
       _characters.add(character);
+      _previousLevel = character.level;
+      _addActivity('Created character ${character.name}', 'person_add');
       notifyListeners();
       return characterId;
     } catch (e) {
@@ -105,6 +140,7 @@ class CharacterProvider extends ChangeNotifier {
     _setError(null);
     
     try {
+      final character = _characters.firstWhere((c) => c.id == characterId);
       await _characterService.deleteCharacter(characterId);
       
       // Remove from local list
@@ -115,6 +151,7 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = null;
       }
       
+      _addActivity('Deleted character ${character.name}', 'delete');
       notifyListeners();
       return true;
     } catch (e) {
@@ -143,6 +180,7 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      _addActivity('Equipped ${item.card.name}', 'check_circle', details: item.card.type.name);
       notifyListeners();
       return true;
     } catch (e) {
@@ -156,6 +194,9 @@ class CharacterProvider extends ChangeNotifier {
     _setError(null);
     
     try {
+      final character = _characters.firstWhere((c) => c.id == characterId);
+      final equippedItem = character.equipment.getSlot(slot);
+      
       final updatedCharacter = await _characterService.unequipItem(characterId, slot);
       
       // Update in local list
@@ -169,6 +210,9 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      if (equippedItem != null) {
+        _addActivity('Unequipped ${equippedItem.card.name}', 'remove_circle', details: slot.name);
+      }
       notifyListeners();
       return true;
     } catch (e) {
@@ -195,6 +239,7 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      _addActivity('Found ${item.card.name}', 'add_box', details: item.card.rarity.name);
       notifyListeners();
       return true;
     } catch (e) {
@@ -208,6 +253,9 @@ class CharacterProvider extends ChangeNotifier {
     _setError(null);
     
     try {
+      final character = _characters.firstWhere((c) => c.id == characterId);
+      final item = character.inventory.firstWhere((item) => item.instanceId == itemInstanceId);
+      
       final updatedCharacter = await _characterService.removeItemFromInventory(characterId, itemInstanceId);
       
       // Update in local list
@@ -221,6 +269,7 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      _addActivity('Discarded ${item.card.name}', 'delete', details: 'inventory');
       notifyListeners();
       return true;
     } catch (e) {
@@ -234,6 +283,9 @@ class CharacterProvider extends ChangeNotifier {
     _setError(null);
     
     try {
+      final character = _characters.firstWhere((c) => c.id == characterId);
+      final item = character.inventory.firstWhere((item) => item.instanceId == itemInstanceId);
+      
       final updatedCharacter = await _characterService.moveItemToStash(characterId, itemInstanceId);
       
       // Update in local list
@@ -247,6 +299,7 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      _addActivity('Moved ${item.card.name} to stash', 'storage');
       notifyListeners();
       return true;
     } catch (e) {
@@ -260,6 +313,9 @@ class CharacterProvider extends ChangeNotifier {
     _setError(null);
     
     try {
+      final character = _characters.firstWhere((c) => c.id == characterId);
+      final item = character.stash.firstWhere((item) => item.instanceId == itemInstanceId);
+      
       final updatedCharacter = await _characterService.moveItemFromStash(characterId, itemInstanceId);
       
       // Update in local list
@@ -273,6 +329,7 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      _addActivity('Moved ${item.card.name} from stash', 'inventory');
       notifyListeners();
       return true;
     } catch (e) {
@@ -286,6 +343,9 @@ class CharacterProvider extends ChangeNotifier {
     _setError(null);
     
     try {
+      final oldCharacter = _characters.firstWhere((c) => c.id == characterId);
+      final oldLevel = oldCharacter.level;
+      
       final updatedCharacter = await _characterService.levelUpCharacter(characterId);
       
       // Update in local list
@@ -297,6 +357,18 @@ class CharacterProvider extends ChangeNotifier {
       // Update selected character if it's the same one
       if (_selectedCharacter?.id == characterId) {
         _selectedCharacter = updatedCharacter;
+      }
+      
+      // Check for level up
+      if (updatedCharacter.level > oldLevel) {
+        _hasLeveledUp = true;
+        _previousLevel = updatedCharacter.level;
+        final levelsGained = updatedCharacter.level - oldLevel;
+        _addActivity(
+          'LEVEL UP! Reached level ${updatedCharacter.level}', 
+          'star', 
+          details: '+${levelsGained * 5} stat points, +$levelsGained skill points'
+        );
       }
       
       notifyListeners();
@@ -337,6 +409,10 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      // Log stat allocation
+      final totalPoints = strengthPoints + dexterityPoints + vitalityPoints + energyPoints;
+      _addActivity('Allocated $totalPoints stat points', 'trending_up', details: 'character progression');
+      
       notifyListeners();
       return true;
     } catch (e) {
@@ -346,10 +422,13 @@ class CharacterProvider extends ChangeNotifier {
   }
   
   /// Adds experience to a character
-  Future<bool> addExperience(String characterId, int experiencePoints) async {
+  Future<bool> addExperience(String characterId, int experiencePoints, {String? source}) async {
     _setError(null);
     
     try {
+      final oldCharacter = _characters.firstWhere((c) => c.id == characterId);
+      final oldLevel = oldCharacter.level;
+      
       final updatedCharacter = await _characterService.addExperience(characterId, experiencePoints);
       
       // Update in local list
@@ -363,12 +442,81 @@ class CharacterProvider extends ChangeNotifier {
         _selectedCharacter = updatedCharacter;
       }
       
+      // Check for level up
+      if (updatedCharacter.level > oldLevel) {
+        _hasLeveledUp = true;
+        _previousLevel = updatedCharacter.level;
+        final levelsGained = updatedCharacter.level - oldLevel;
+        _addActivity(
+          'LEVEL UP! Reached level ${updatedCharacter.level}', 
+          'star', 
+          details: '+${levelsGained * 5} stat points, +$levelsGained skill points'
+        );
+      } else {
+        _addActivity(
+          'Gained $experiencePoints XP', 
+          'trending_up', 
+          details: source ?? 'adventure'
+        );
+      }
+      
       notifyListeners();
       return true;
     } catch (e) {
       _setError('Failed to add experience: $e');
       return false;
     }
+  }
+  
+  // NEW: Adventure and Quest Management
+  Future<void> completeAdventure(String adventureName, int expReward, List<CardInstance>? itemRewards) async {
+    if (_selectedCharacter == null) return;
+    
+    await addExperience(_selectedCharacter!.id, expReward, source: adventureName);
+    
+    if (itemRewards != null) {
+      for (final item in itemRewards) {
+        await addItemToInventory(_selectedCharacter!.id, item);
+      }
+    }
+    
+    _addActivity('Completed $adventureName', 'explore', details: '+$expReward XP');
+  }
+  
+  Future<void> startQuest(String questName, String location) async {
+    _addActivity('Started quest: $questName', 'assignment', details: location);
+    notifyListeners();
+  }
+  
+  Future<void> completeQuest(String questName, int expReward, List<CardInstance>? itemRewards) async {
+    if (_selectedCharacter == null) return;
+    
+    await addExperience(_selectedCharacter!.id, expReward, source: 'Quest: $questName');
+    
+    if (itemRewards != null) {
+      for (final item in itemRewards) {
+        await addItemToInventory(_selectedCharacter!.id, item);
+      }
+    }
+    
+    _addActivity('Completed quest: $questName', 'assignment_turned_in', details: '+$expReward XP');
+  }
+  
+  Future<void> winDuel(String opponentName, int expReward) async {
+    if (_selectedCharacter == null) return;
+    
+    await addExperience(_selectedCharacter!.id, expReward, source: 'Duel victory');
+    _addActivity('Defeated $opponentName in duel', 'sports_martial_arts', details: '+$expReward XP');
+  }
+  
+  Future<void> loseDuel(String opponentName) async {
+    _addActivity('Lost duel to $opponentName', 'sentiment_dissatisfied', details: 'better luck next time');
+  }
+  
+  // NEW: QR Code Integration
+  Future<void> scanQRCode(String qrData) async {
+    _addActivity('Scanned QR code', 'qr_code_scanner', details: 'physical card');
+    notifyListeners();
   }
   
   /// Updates character's health
@@ -484,5 +632,35 @@ class CharacterProvider extends ChangeNotifier {
   void clearError() {
     _error = null;
     notifyListeners();
+  }
+}
+
+// NEW: Activity Entry class
+class ActivityEntry {
+  final String action;
+  final String icon;
+  final DateTime timestamp;
+  final String? details;
+  
+  ActivityEntry({
+    required this.action,
+    required this.icon,
+    required this.timestamp,
+    this.details,
+  });
+  
+  String get timeAgo {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+    
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inMinutes < 60) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inHours < 24) {
+      return '${difference.inHours}h ago';
+    } else {
+      return '${difference.inDays}d ago';
+    }
   }
 }
