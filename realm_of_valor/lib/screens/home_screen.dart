@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/character_model.dart';
 import '../models/card_model.dart';
 import '../providers/character_provider.dart';
+import '../services/card_service.dart';
 import '../constants/theme.dart';
 import '../widgets/inventory_widget.dart';
 import 'card_editor_screen.dart';
@@ -682,16 +683,264 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _showAddItemDialog(CharacterProvider provider) {
-    // Implementation for adding items dialog
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Add Item feature coming soon!')),
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Item'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: Consumer<CardService>(
+            builder: (context, cardService, child) {
+              final availableCards = cardService.getAllCards();
+              
+              if (availableCards.isEmpty) {
+                return Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.inventory_2,
+                      size: 64,
+                      color: RealmOfValorTheme.textSecondary,
+                    ),
+                    const SizedBox(height: 16),
+                    const Text(
+                      'No cards available',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: RealmOfValorTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Create some cards in the Card Editor first',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: RealmOfValorTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context);
+                        setState(() => _selectedIndex = 2); // Switch to Card Editor
+                      },
+                      child: const Text('Go to Card Editor'),
+                    ),
+                  ],
+                );
+              }
+              
+              return ListView.builder(
+                itemCount: availableCards.length,
+                itemBuilder: (context, index) {
+                  final card = availableCards[index];
+                  return Card(
+                    child: ListTile(
+                      leading: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: RealmOfValorTheme.getRarityColor(card.rarity),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          _getCardTypeIcon(card.type),
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                      ),
+                      title: Text(
+                        card.name,
+                        style: TextStyle(
+                          color: RealmOfValorTheme.getRarityColor(card.rarity),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      subtitle: Text(
+                        '${card.type.name.toUpperCase()} • ${card.rarity.name.toUpperCase()}',
+                        style: const TextStyle(
+                          color: RealmOfValorTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.add, color: RealmOfValorTheme.accentGold),
+                        onPressed: () {
+                          final cardInstance = CardInstance(card: card);
+                          provider.addToInventory(cardInstance);
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Added ${card.name} to inventory!')),
+                          );
+                        },
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _showQuickAddItemDialog(provider);
+            },
+            child: const Text('Quick Add'),
+          ),
+        ],
+      ),
     );
   }
 
+  void _showQuickAddItemDialog(CharacterProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Quick Add Item'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Add a random item to your inventory:'),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _buildQuickAddButton('Weapon', CardType.weapon, provider),
+                _buildQuickAddButton('Armor', CardType.armor, provider),
+                _buildQuickAddButton('Potion', CardType.consumable, provider),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickAddButton(String label, CardType type, CharacterProvider provider) {
+    return ElevatedButton(
+      onPressed: () {
+        final cardService = context.read<CardService>();
+        final randomCard = cardService.generateRandomCard();
+        final cardInstance = CardInstance(card: randomCard);
+        provider.addToInventory(cardInstance);
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Added ${randomCard.name} to inventory!')),
+        );
+      },
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(_getCardTypeIcon(type)),
+          const SizedBox(height: 4),
+          Text(label),
+        ],
+      ),
+    );
+  }
+
+  IconData _getCardTypeIcon(CardType type) {
+    switch (type) {
+      case CardType.weapon:
+        return Icons.sports_martial_arts;
+      case CardType.armor:
+        return Icons.shield;
+      case CardType.consumable:
+        return Icons.local_drink;
+      case CardType.spell:
+        return Icons.auto_fix_high;
+      case CardType.skill:
+        return Icons.psychology;
+      case CardType.quest:
+        return Icons.assignment;
+      case CardType.adventure:
+        return Icons.explore;
+      case CardType.accessory:
+        return Icons.diamond;
+      default:
+        return Icons.category;
+    }
+  }
+
   void _scanQRCode() {
-    // Implementation for QR code scanning
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('QR Code Scanner'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.qr_code_scanner,
+              size: 64,
+              color: RealmOfValorTheme.accentGold,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'QR Code Scanner',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Scan physical cards to add them to your digital collection',
+              style: TextStyle(
+                color: RealmOfValorTheme.textSecondary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _simulateQRScan();
+              },
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Simulate Scan'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _simulateQRScan() {
+    // Simulate QR code scanning by adding a random card
+    final cardService = context.read<CardService>();
+    final characterProvider = context.read<CharacterProvider>();
+    
+    final randomCard = cardService.generateRandomCard();
+    final cardInstance = CardInstance(card: randomCard);
+    
+    characterProvider.addToInventory(cardInstance);
+    
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('QR Scanner feature coming soon!')),
+      SnackBar(
+        content: Text('Scanned and added: ${randomCard.name}'),
+        backgroundColor: RealmOfValorTheme.experienceGreen,
+      ),
     );
   }
 }
