@@ -12,7 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:realm_of_valor/main.dart';
 
 void main() {
-  testWidgets('App starts without crashing', (WidgetTester tester) async {
+  testWidgets('App initializes correctly', (WidgetTester tester) async {
     // Initialize SharedPreferences for testing
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -20,7 +20,23 @@ void main() {
     // Build our app and trigger a frame.
     await tester.pumpWidget(RealmOfValorApp(prefs: prefs));
 
-    // Verify that the app title is displayed
+    // Verify that the loading screen is displayed initially
     expect(find.text('Realm of Valor'), findsOneWidget);
+    expect(find.text('Loading your adventure...'), findsOneWidget);
+  });
+  
+  testWidgets('Simple app widget test', (WidgetTester tester) async {
+    // Test a simple widget to ensure the test environment is working
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          appBar: AppBar(title: const Text('Test App')),
+          body: const Center(child: Text('Hello World')),
+        ),
+      ),
+    );
+
+    expect(find.text('Test App'), findsOneWidget);
+    expect(find.text('Hello World'), findsOneWidget);
   });
 }

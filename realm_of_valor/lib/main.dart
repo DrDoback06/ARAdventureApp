@@ -9,12 +9,45 @@ import 'services/card_service.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialize SharedPreferences
-  final prefs = await SharedPreferences.getInstance();
-  
-  runApp(RealmOfValorApp(prefs: prefs));
+  try {
+    WidgetsFlutterBinding.ensureInitialized();
+    
+    // Initialize SharedPreferences with error handling
+    final prefs = await SharedPreferences.getInstance();
+    
+    runApp(RealmOfValorApp(prefs: prefs));
+  } catch (e) {
+    // Fallback to simple app if initialization fails
+    runApp(const ErrorApp());
+  }
+}
+
+class ErrorApp extends StatelessWidget {
+  const ErrorApp({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Realm of Valor - Error',
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text('App failed to initialize'),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () => main(),
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class RealmOfValorApp extends StatelessWidget {
@@ -29,25 +62,187 @@ class RealmOfValorApp extends StatelessWidget {
         // Services
         Provider<SharedPreferences>.value(value: prefs),
         Provider<CharacterService>(
-          create: (context) => CharacterService(prefs),
+          create: (context) {
+            try {
+              return CharacterService(prefs);
+            } catch (e) {
+              debugPrint('CharacterService initialization error: $e');
+              rethrow;
+            }
+          },
         ),
         Provider<CardService>(
-          create: (context) => CardService(prefs),
+          create: (context) {
+            try {
+              return CardService(prefs);
+            } catch (e) {
+              debugPrint('CardService initialization error: $e');
+              rethrow;
+            }
+          },
         ),
         
         // State Providers
         ChangeNotifierProvider<CharacterProvider>(
-          create: (context) => CharacterProvider(
-            context.read<CharacterService>(),
-          ),
+          create: (context) {
+            try {
+              return CharacterProvider(
+                context.read<CharacterService>(),
+              );
+            } catch (e) {
+              debugPrint('CharacterProvider initialization error: $e');
+              rethrow;
+            }
+          },
         ),
       ],
       child: MaterialApp(
         title: 'Realm of Valor',
         debugShowCheckedModeBanner: false,
         theme: RealmOfValorTheme.darkTheme,
-        home: const HomeScreen(),
+        home: const LoadingWrapper(),
       ),
     );
+  }
+}
+
+class LoadingWrapper extends StatefulWidget {
+  const LoadingWrapper({Key? key}) : super(key: key);
+
+  @override
+  State<LoadingWrapper> createState() => _LoadingWrapperState();
+}
+
+class _LoadingWrapperState extends State<LoadingWrapper> {
+  bool _isLoading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeApp();
+  }
+
+  Future<void> _initializeApp() async {
+    try {
+      // Add a small delay to ensure all providers are ready
+      await Future.delayed(const Duration(milliseconds: 100));
+      
+      // Try to access the services to ensure they're working
+      final characterService = context.read<CharacterService>();
+      final cardService = context.read<CardService>();
+      
+      // Test basic functionality
+      characterService.getAllCharacters();
+      cardService.getAllCards();
+      
+      setState(() {
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        backgroundColor: RealmOfValorTheme.primaryDark,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: RealmOfValorTheme.accentGold,
+                  borderRadius: BorderRadius.circular(40),
+                ),
+                child: const Icon(
+                  Icons.castle,
+                  size: 40,
+                  color: RealmOfValorTheme.primaryDark,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const Text(
+                'Realm of Valor',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: RealmOfValorTheme.accentGold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Loading your adventure...',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: RealmOfValorTheme.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation(RealmOfValorTheme.accentGold),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return Scaffold(
+        backgroundColor: RealmOfValorTheme.primaryDark,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline,
+                size: 64,
+                color: RealmOfValorTheme.healthRed,
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Failed to load app',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: RealmOfValorTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _error!,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: RealmOfValorTheme.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  setState(() {
+                    _isLoading = true;
+                    _error = null;
+                  });
+                  _initializeApp();
+                },
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return const HomeScreen();
   }
 }
