@@ -129,7 +129,11 @@ class PhysicalActivityService {
         HealthDataType.ACTIVE_ENERGY_BURNED,
       ];
 
-      return await _health.getHealthDataFromTypes(start, end, types);
+      return await _health.getHealthDataFromTypes(
+        types: types,
+        startTime: start,
+        endTime: end,
+      );
     } catch (e) {
       print('Error getting health data: $e');
       return [];
@@ -413,7 +417,7 @@ class PhysicalActivityService {
       case ActivityType.walking:
         return HealthWorkoutActivityType.WALKING;
       case ActivityType.cycling:
-        return HealthWorkoutActivityType.CYCLING;
+        return HealthWorkoutActivityType.BIKING;
       case ActivityType.swimming:
         return HealthWorkoutActivityType.SWIMMING;
       case ActivityType.yoga:
@@ -429,11 +433,16 @@ class PhysicalActivityService {
     final metrics = <HealthMetrics>[];
     
     for (final point in healthData) {
+      final value = point.value;
+      final numericValue = value is HealthValue ? 
+        (value.numericValue ?? 0.0) : 
+        (value as num).toDouble();
+        
       final metric = HealthMetrics(
-        steps: point.type == HealthDataType.STEPS ? point.value.toInt() : 0,
-        distanceMeters: point.type == HealthDataType.DISTANCE_WALKING_RUNNING ? point.value : 0,
-        heartRate: point.type == HealthDataType.HEART_RATE ? point.value.toInt() : 0,
-        caloriesBurned: point.type == HealthDataType.ACTIVE_ENERGY_BURNED ? point.value.toInt() : 0,
+        steps: point.type == HealthDataType.STEPS ? numericValue.toInt() : 0,
+        distanceMeters: point.type == HealthDataType.DISTANCE_WALKING_RUNNING ? numericValue : 0,
+        heartRate: point.type == HealthDataType.HEART_RATE ? numericValue.toInt() : 0,
+        caloriesBurned: point.type == HealthDataType.ACTIVE_ENERGY_BURNED ? numericValue.toInt() : 0,
         elevationGain: 0, // Would need additional data source
         timestamp: point.dateFrom,
       );

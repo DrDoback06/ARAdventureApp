@@ -197,4 +197,7 @@ const _$CardRarityEnumMap = {
   CardRarity.epic: 'epic',
   CardRarity.legendary: 'legendary',
   CardRarity.mythic: 'mythic',
+  CardRarity.holographic: 'holographic',
+  CardRarity.firstEdition: 'firstEdition',
+  CardRarity.limitedEdition: 'limitedEdition',
 };
