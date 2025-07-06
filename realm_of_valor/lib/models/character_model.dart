@@ -74,6 +74,33 @@ class Equipment {
       amulet,
     ].where((item) => item != null).cast<CardInstance>().toList();
   }
+
+  CardInstance? getItemInSlot(EquipmentSlot slot) {
+    switch (slot) {
+      case EquipmentSlot.helmet:
+        return helmet;
+      case EquipmentSlot.armor:
+        return armor;
+      case EquipmentSlot.weapon1:
+        return weapon1;
+      case EquipmentSlot.weapon2:
+        return weapon2;
+      case EquipmentSlot.gloves:
+        return gloves;
+      case EquipmentSlot.boots:
+        return boots;
+      case EquipmentSlot.belt:
+        return belt;
+      case EquipmentSlot.ring1:
+        return ring1;
+      case EquipmentSlot.ring2:
+        return ring2;
+      case EquipmentSlot.amulet:
+        return amulet;
+      default:
+        return null;
+    }
+  }
 }
 
 @JsonSerializable()

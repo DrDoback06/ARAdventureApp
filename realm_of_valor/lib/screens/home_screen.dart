@@ -89,30 +89,53 @@ class _HomeScreenState extends State<HomeScreen> {
           return _buildNoCharacterView(characterProvider);
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Character Overview Card
-              _buildCharacterOverviewCard(character),
-              
-              const SizedBox(height: 16),
-              
-              // Quick Actions
-              _buildQuickActionsCard(characterProvider),
-              
-              const SizedBox(height: 16),
-              
-              // Stats Overview
-              _buildStatsOverviewCard(character),
-              
-              const SizedBox(height: 16),
-              
-              // Recent Activity
-              _buildRecentActivityCard(),
-            ],
-          ),
+        return Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Character Overview Card
+                  _buildCharacterOverviewCard(character),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Quick Actions
+                  _buildQuickActionsCard(characterProvider),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Stats Overview
+                  _buildStatsOverviewCard(character),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // NEW: Character Power Rating
+                  _buildPowerRatingCard(character),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // NEW: Daily Challenges
+                  _buildDailyChallengesCard(characterProvider),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Real Activity Feed
+                  _buildRealActivityCard(characterProvider),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // NEW: Character Achievements
+                  _buildAchievementsCard(character),
+                ],
+              ),
+            ),
+            
+            // Level Up Overlay
+            if (characterProvider.hasLeveledUp)
+              _buildLevelUpOverlay(character, characterProvider),
+          ],
         );
       },
     );
@@ -280,25 +303,53 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 Expanded(
                   child: _buildQuickActionButton(
-                    'Add Experience',
-                    Icons.trending_up,
-                    () => _showAddExperienceDialog(provider),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Add Item',
-                    Icons.add_box,
-                    () => _showAddItemDialog(provider),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
                     'Scan QR',
                     Icons.qr_code_scanner,
                     () => _scanQRCode(),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    'Find Loot',
+                    Icons.search,
+                    () => _findRandomLoot(provider),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    'Quick Duel',
+                    Icons.sports_martial_arts,
+                    () => _startQuickDuel(provider),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildQuickActionButton(
+                    'Rest at Inn',
+                    Icons.hotel,
+                    () => _restAtInn(provider),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    'Train Skills',
+                    Icons.fitness_center,
+                    () => _trainSkills(provider),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildQuickActionButton(
+                    'Merchant',
+                    Icons.store,
+                    () => _visitMerchant(provider),
                   ),
                 ),
               ],
@@ -503,7 +554,80 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildRecentActivityCard() {
+  Widget _buildPowerRatingCard(GameCharacter character) {
+    final powerRating = _calculatePowerRating(character);
+    final powerTier = _getPowerTier(powerRating);
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Power Rating',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.accentGold,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: powerTier['color'],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    powerTier['name'],
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Icon(Icons.flash_on, color: powerTier['color'], size: 32),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        powerRating.toString(),
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: powerTier['color'],
+                        ),
+                      ),
+                      Text(
+                        'Combat effectiveness rating',
+                        style: const TextStyle(
+                          color: RealmOfValorTheme.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDailyChallengesCard(CharacterProvider provider) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -511,44 +635,349 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Recent Activity',
+              'Daily Challenges',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: RealmOfValorTheme.accentGold,
               ),
             ),
-            const SizedBox(height: 16),
-            _buildActivityItem('Character created', Icons.person_add, '2 hours ago'),
-            _buildActivityItem('Equipped Iron Sword', Icons.sports_martial_arts, '1 hour ago'),
-            _buildActivityItem('Gained 500 XP', Icons.trending_up, '30 minutes ago'),
+            const SizedBox(height: 12),
+            _buildChallengeItem('Defeat 5 Enemies', '3/5', 0.6, Icons.sports_martial_arts),
+            const SizedBox(height: 8),
+            _buildChallengeItem('Find 3 Items', '1/3', 0.33, Icons.inventory),
+            const SizedBox(height: 8),
+            _buildChallengeItem('Gain 1000 XP', '750/1000', 0.75, Icons.trending_up),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildActivityItem(String activity, IconData icon, String time) {
+  Widget _buildChallengeItem(String title, String progress, double progressValue, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, color: RealmOfValorTheme.accentGold, size: 20),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      color: RealmOfValorTheme.textPrimary,
+                      fontSize: 14,
+                    ),
+                  ),
+                  Text(
+                    progress,
+                    style: const TextStyle(
+                      color: RealmOfValorTheme.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: progressValue,
+                backgroundColor: RealmOfValorTheme.surfaceLight,
+                valueColor: const AlwaysStoppedAnimation(RealmOfValorTheme.accentGold),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRealActivityCard(CharacterProvider provider) {
+    final activities = provider.recentActivity;
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Recent Activity',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.accentGold,
+                  ),
+                ),
+                if (activities.isNotEmpty)
+                  TextButton(
+                    onPressed: () => _showFullActivityLog(activities),
+                    child: const Text('View All'),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            if (activities.isEmpty) ...[
+              Center(
+                child: Column(
+                  children: [
+                    const Icon(
+                      Icons.history,
+                      size: 48,
+                      color: RealmOfValorTheme.textSecondary,
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'No recent activity',
+                      style: TextStyle(
+                        color: RealmOfValorTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Start playing to see your adventures here!',
+                      style: TextStyle(
+                        color: RealmOfValorTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ] else ...[
+              ...activities.take(5).map((activity) => _buildRealActivityItem(activity)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRealActivityItem(ActivityEntry activity) {
+    IconData iconData;
+    switch (activity.icon) {
+      case 'person_add':
+        iconData = Icons.person_add;
+        break;
+      case 'check_circle':
+        iconData = Icons.check_circle;
+        break;
+      case 'trending_up':
+        iconData = Icons.trending_up;
+        break;
+      case 'star':
+        iconData = Icons.star;
+        break;
+      case 'explore':
+        iconData = Icons.explore;
+        break;
+      case 'add_box':
+        iconData = Icons.add_box;
+        break;
+      case 'sports_martial_arts':
+        iconData = Icons.sports_martial_arts;
+        break;
+      case 'qr_code_scanner':
+        iconData = Icons.qr_code_scanner;
+        break;
+      default:
+        iconData = Icons.info;
+    }
+    
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: RealmOfValorTheme.accentGold),
+          Icon(iconData, size: 16, color: RealmOfValorTheme.accentGold),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(
-              activity,
-              style: const TextStyle(color: RealmOfValorTheme.textPrimary),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  activity.action,
+                  style: const TextStyle(color: RealmOfValorTheme.textPrimary),
+                ),
+                if (activity.details != null)
+                  Text(
+                    activity.details!,
+                    style: const TextStyle(
+                      color: RealmOfValorTheme.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+              ],
             ),
           ),
           Text(
-            time,
+            activity.timeAgo,
             style: const TextStyle(
               color: RealmOfValorTheme.textSecondary,
               fontSize: 12,
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAchievementsCard(GameCharacter character) {
+    final achievements = _getCharacterAchievements(character);
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Achievements',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.accentGold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: achievements.map((achievement) => 
+                Expanded(
+                  child: _buildAchievementBadge(
+                    achievement['title'],
+                    achievement['icon'],
+                    achievement['unlocked'],
+                  ),
+                ),
+              ).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAchievementBadge(String title, IconData icon, bool unlocked) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 4),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: unlocked ? RealmOfValorTheme.accentGold : RealmOfValorTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          Icon(
+            icon,
+            color: unlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
+            size: 24,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            title,
+            style: TextStyle(
+              color: unlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
+              fontSize: 10,
+              fontWeight: FontWeight.bold,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLevelUpOverlay(GameCharacter character, CharacterProvider provider) {
+    return Container(
+      color: Colors.black.withOpacity(0.8),
+      child: Center(
+        child: TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 1500),
+          tween: Tween(begin: 0.0, end: 1.0),
+          builder: (context, value, child) {
+            return Transform.scale(
+              scale: 0.5 + (value * 0.5),
+              child: Opacity(
+                opacity: value,
+                child: Card(
+                  child: Container(
+                    width: 300,
+                    padding: const EdgeInsets.all(32),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 80,
+                          height: 80,
+                          decoration: BoxDecoration(
+                            color: RealmOfValorTheme.accentGold,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: RealmOfValorTheme.accentGold.withOpacity(0.5),
+                                blurRadius: 20,
+                                spreadRadius: 5,
+                              ),
+                            ],
+                          ),
+                          child: const Icon(
+                            Icons.star,
+                            color: RealmOfValorTheme.primaryDark,
+                            size: 40,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        const Text(
+                          'LEVEL UP!',
+                          style: TextStyle(
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                            color: RealmOfValorTheme.accentGold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Level ${character.level}',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            color: RealmOfValorTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          '+${character.availableStatPoints} Stat Points',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: RealmOfValorTheme.experienceGreen,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          '+${character.availableSkillPoints} Skill Points',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            color: RealmOfValorTheme.manaBlue,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () => provider.clearLevelUpFlag(),
+                          child: const Text('Continue'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -820,9 +1249,17 @@ class _HomeScreenState extends State<HomeScreen> {
               textAlign: TextAlign.center,
               style: const TextStyle(color: RealmOfValorTheme.textPrimary),
             ),
+            const SizedBox(height: 8),
+            Text(
+              'Power Rating: ${_calculatePowerRating(character)}',
+              style: const TextStyle(
+                color: RealmOfValorTheme.accentGold,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 16),
             const Text(
-              'Adventure features coming soon! For now, enjoy some bonus experience.',
+              'Complete the adventure to gain experience and find treasure!',
               style: TextStyle(
                 color: RealmOfValorTheme.textSecondary,
                 fontSize: 12,
@@ -838,18 +1275,113 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           ElevatedButton(
             onPressed: () {
-              // Give some bonus experience for now
-              final characterProvider = context.read<CharacterProvider>();
-              characterProvider.addExperience(100);
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Adventure completed! Gained 100 XP!'),
-                  backgroundColor: RealmOfValorTheme.experienceGreen,
-                ),
-              );
+              _completeAdventure(adventureName, character);
             },
             child: const Text('Start Adventure'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _completeAdventure(String adventureName, GameCharacter character) {
+    final characterProvider = context.read<CharacterProvider>();
+    final cardService = context.read<CardService>();
+    
+    // Calculate rewards based on adventure and character level
+    int expReward = 100;
+    List<CardInstance>? itemRewards;
+    
+    switch (adventureName) {
+      case 'Enchanted Forest':
+        expReward = 100 + (character.level * 10);
+        break;
+      case 'Crystal Caves':
+        expReward = 200 + (character.level * 15);
+        if (DateTime.now().millisecond % 3 == 0) {
+          final crystal = cardService.createBasicConsumable(
+            name: 'Magic Crystal',
+            description: 'A glowing crystal that boosts mana',
+            effectType: 'mana_boost',
+            effectValue: 50,
+            rarity: CardRarity.rare,
+          );
+          itemRewards = [CardInstance(card: crystal)];
+        }
+        break;
+      case 'Sky Temple':
+        expReward = 350 + (character.level * 20);
+        if (DateTime.now().millisecond % 2 == 0) {
+          final artifact = cardService.generateRandomCard();
+          itemRewards = [CardInstance(card: artifact)];
+        }
+        break;
+      case 'Dragon\'s Lair':
+        expReward = 500 + (character.level * 25);
+        // Always get treasure from dragon
+        final treasure1 = cardService.generateRandomCard();
+        final treasure2 = cardService.generateRandomCard();
+        itemRewards = [CardInstance(card: treasure1), CardInstance(card: treasure2)];
+        break;
+    }
+    
+    // Complete the adventure with rewards
+    characterProvider.completeAdventure(adventureName, expReward, itemRewards);
+    
+    // Show completion dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$adventureName Complete!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.celebration,
+              size: 64,
+              color: RealmOfValorTheme.experienceGreen,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Adventure completed successfully!',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Gained $expReward XP!',
+              style: const TextStyle(
+                color: RealmOfValorTheme.experienceGreen,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (itemRewards != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Found ${itemRewards.length} treasure${itemRewards.length > 1 ? 's' : ''}!',
+                style: const TextStyle(
+                  color: RealmOfValorTheme.accentGold,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              ...itemRewards.map((item) => Text(
+                '• ${item.card.name}',
+                style: TextStyle(
+                  color: RealmOfValorTheme.getRarityColor(item.card.rarity),
+                  fontSize: 12,
+                ),
+              )),
+            ],
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Awesome!'),
           ),
         ],
       ),
@@ -1364,7 +1896,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
             const Text(
-              'QR Code Scanner',
+              'Scan Physical Cards',
               style: TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -1373,21 +1905,19 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Scan physical cards to add them to your digital collection',
-              style: TextStyle(
-                color: RealmOfValorTheme.textSecondary,
-              ),
+              'Point your camera at a physical card to add it to your collection',
+              style: TextStyle(color: RealmOfValorTheme.textSecondary),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: () {
-                Navigator.pop(context);
-                _simulateQRScan();
-              },
-              icon: const Icon(Icons.camera_alt),
-              label: const Text('Simulate Scan'),
-            ),
+                         Row(
+               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+               children: [
+                                   _buildQRTypeButton('Item', Icons.inventory, () => _scanItemCard(context.read<CharacterProvider>())),
+                  _buildQRTypeButton('Quest', Icons.assignment, () => _scanQuestCard(context.read<CharacterProvider>())),
+                  _buildQRTypeButton('Enemy', Icons.sports_martial_arts, () => _scanEnemyCard(context.read<CharacterProvider>())),
+               ],
+             ),
           ],
         ),
         actions: [
@@ -1400,20 +1930,409 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _simulateQRScan() {
-    // Simulate QR code scanning by adding a random card
+  Widget _buildQRTypeButton(String label, IconData icon, VoidCallback onPressed) {
+    return ElevatedButton(
+      onPressed: () {
+        Navigator.pop(context);
+        onPressed();
+      },
+      style: ElevatedButton.styleFrom(
+        padding: const EdgeInsets.all(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  void _scanItemCard(CharacterProvider provider) {
     final cardService = context.read<CardService>();
-    final characterProvider = context.read<CharacterProvider>();
-    
     final randomCard = cardService.generateRandomCard();
     final cardInstance = CardInstance(card: randomCard);
     
-    characterProvider.addToInventory(cardInstance);
+    provider.addToInventory(cardInstance);
+    provider.scanQRCode('item_${randomCard.id}');
     
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Scanned and added: ${randomCard.name}'),
+        content: Text('Scanned item: ${randomCard.name}'),
         backgroundColor: RealmOfValorTheme.experienceGreen,
+      ),
+    );
+  }
+
+  void _scanQuestCard(CharacterProvider provider) {
+    final questNames = ['Ancient Ruins', 'Dragon\'s Treasure', 'Lost Artifact', 'Mystic Portal'];
+    final questName = questNames[DateTime.now().millisecond % questNames.length];
+    
+    provider.startQuest(questName, 'Enchanted Forest');
+    provider.scanQRCode('quest_$questName');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Quest Discovered: $questName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.assignment, size: 64, color: RealmOfValorTheme.accentGold),
+            const SizedBox(height: 16),
+            Text('A new quest has been added to your map!'),
+            const SizedBox(height: 8),
+            const Text('Check the Map tab to start your adventure.'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              setState(() => _selectedIndex = 3); // Switch to Map tab
+            },
+            child: const Text('Go to Map'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _scanEnemyCard(CharacterProvider provider) {
+    final enemyNames = ['Goblin Scout', 'Shadow Wolf', 'Fire Imp', 'Ice Troll'];
+    final enemyName = enemyNames[DateTime.now().millisecond % enemyNames.length];
+    
+    provider.scanQRCode('enemy_$enemyName');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Enemy Encountered: $enemyName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.sports_martial_arts, size: 64, color: RealmOfValorTheme.healthRed),
+            const SizedBox(height: 16),
+            Text('A wild $enemyName appears!'),
+            const SizedBox(height: 8),
+            const Text('Prepare for battle!'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Flee'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startDuel(provider, enemyName);
+            },
+            child: const Text('Fight!'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _findRandomLoot(CharacterProvider provider) {
+    final cardService = context.read<CardService>();
+    final lootCard = cardService.generateRandomCard();
+    final cardInstance = CardInstance(card: lootCard);
+    
+    provider.addToInventory(cardInstance);
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Loot Found!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.card_giftcard,
+              size: 64,
+              color: RealmOfValorTheme.getRarityColor(lootCard.rarity),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              lootCard.name,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.getRarityColor(lootCard.rarity),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${lootCard.rarity.name.toUpperCase()} ${lootCard.type.name.toUpperCase()}',
+              style: const TextStyle(color: RealmOfValorTheme.textSecondary),
+            ),
+            const SizedBox(height: 8),
+            Text(lootCard.description),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Sweet!'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _startQuickDuel(CharacterProvider provider) {
+    final opponents = ['Flame Knight', 'Shadow Assassin', 'Frost Mage', 'Thunder Warrior'];
+    final opponent = opponents[DateTime.now().millisecond % opponents.length];
+    
+    _startDuel(provider, opponent);
+  }
+
+  void _startDuel(CharacterProvider provider, String opponentName) {
+    final character = provider.currentCharacter;
+    if (character == null) return;
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Duel: ${character.name} vs $opponentName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.sports_martial_arts, size: 64, color: RealmOfValorTheme.accentGold),
+            const SizedBox(height: 16),
+            Text('Power Rating: ${_calculatePowerRating(character)}'),
+            const SizedBox(height: 8),
+            const Text('A turn-based duel system will be implemented here!'),
+            const SizedBox(height: 16),
+            const Text('For now, let\'s simulate the outcome...'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Retreat'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _simulateDuel(provider, opponentName);
+            },
+            child: const Text('Fight!'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _simulateDuel(CharacterProvider provider, String opponentName) {
+    final character = provider.currentCharacter!;
+    final powerRating = _calculatePowerRating(character);
+    final victory = powerRating > 50 + (DateTime.now().millisecond % 100);
+    
+    if (victory) {
+      final expReward = 150 + (DateTime.now().millisecond % 100);
+      provider.winDuel(opponentName, expReward);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Victory! Defeated $opponentName (+$expReward XP)'),
+          backgroundColor: RealmOfValorTheme.experienceGreen,
+        ),
+      );
+    } else {
+      provider.loseDuel(opponentName);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Defeat! $opponentName was too strong this time.'),
+          backgroundColor: RealmOfValorTheme.healthRed,
+        ),
+      );
+    }
+  }
+
+  void _restAtInn(CharacterProvider provider) {
+    provider.addExperience(50, source: 'Rest at Inn');
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rest at Inn'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.hotel, size: 64, color: RealmOfValorTheme.manaBlue),
+            SizedBox(height: 16),
+            Text('You rest at the cozy inn and share stories with fellow adventurers.'),
+            SizedBox(height: 8),
+            Text('Gained 50 XP from learning new techniques!'),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Refreshed!'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _trainSkills(CharacterProvider provider) {
+    final character = provider.currentCharacter;
+    if (character == null) return;
+    
+    if (character.availableSkillPoints > 0) {
+      provider.addExperience(25, source: 'Skill Training');
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Training complete! Check the Inventory tab to spend skill points.'),
+          backgroundColor: RealmOfValorTheme.manaBlue,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No skill points available. Gain more experience to unlock training!'),
+        ),
+      );
+    }
+  }
+
+  void _visitMerchant(CharacterProvider provider) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Merchant\'s Shop'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.store, size: 64, color: RealmOfValorTheme.accentGold),
+            const SizedBox(height: 16),
+            const Text('Welcome to my shop, adventurer!'),
+            const SizedBox(height: 8),
+            const Text('Trading system coming soon...'),
+            const SizedBox(height: 16),
+            const Text('For now, have a free potion!'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Maybe Later'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _giveFreePotion(provider);
+            },
+            child: const Text('Take Potion'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _giveFreePotion(CharacterProvider provider) {
+    final cardService = context.read<CardService>();
+    final potion = cardService.createBasicConsumable(
+      name: 'Health Potion',
+      description: 'Restores health when consumed',
+      effectType: 'heal',
+      effectValue: 100,
+    );
+    final cardInstance = CardInstance(card: potion);
+    
+    provider.addToInventory(cardInstance);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Received Health Potion from the merchant!'),
+        backgroundColor: RealmOfValorTheme.experienceGreen,
+      ),
+    );
+  }
+
+  int _calculatePowerRating(GameCharacter character) {
+    return (character.totalStrength * 2) + 
+           (character.totalDexterity * 2) + 
+           (character.totalVitality * 1.5).round() + 
+           (character.totalEnergy * 1.5).round() + 
+           (character.level * 10) +
+           (character.equipment.getAllEquippedItems().length * 5);
+  }
+
+  Map<String, dynamic> _getPowerTier(int powerRating) {
+    if (powerRating < 50) {
+      return {'name': 'Novice', 'color': RealmOfValorTheme.rarityCommon};
+    } else if (powerRating < 100) {
+      return {'name': 'Apprentice', 'color': RealmOfValorTheme.rarityUncommon};
+    } else if (powerRating < 200) {
+      return {'name': 'Warrior', 'color': RealmOfValorTheme.rarityRare};
+    } else if (powerRating < 350) {
+      return {'name': 'Champion', 'color': RealmOfValorTheme.rarityEpic};
+    } else if (powerRating < 500) {
+      return {'name': 'Hero', 'color': RealmOfValorTheme.rarityLegendary};
+    } else {
+      return {'name': 'Legend', 'color': RealmOfValorTheme.rarityMythic};
+    }
+  }
+
+  List<Map<String, dynamic>> _getCharacterAchievements(GameCharacter character) {
+    return [
+      {
+        'title': 'First Steps',
+        'icon': Icons.directions_walk,
+        'unlocked': character.level >= 1,
+      },
+      {
+        'title': 'Equipped',
+        'icon': Icons.shield,
+        'unlocked': character.equipment.getAllEquippedItems().isNotEmpty,
+      },
+      {
+        'title': 'Collector',
+        'icon': Icons.inventory,
+        'unlocked': character.inventory.length >= 5,
+      },
+      {
+        'title': 'Veteran',
+        'icon': Icons.star,
+        'unlocked': character.level >= 10,
+      },
+    ];
+  }
+
+  void _showFullActivityLog(List<ActivityEntry> activities) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Activity Log'),
+        content: SizedBox(
+          width: double.maxFinite,
+          height: 400,
+          child: ListView.builder(
+            itemCount: activities.length,
+            itemBuilder: (context, index) {
+              return _buildRealActivityItem(activities[index]);
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }
