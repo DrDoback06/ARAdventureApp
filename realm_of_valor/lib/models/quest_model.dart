@@ -1,6 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:uuid/uuid.dart';
-import 'card_model.dart';
 
 part 'quest_model.g.dart';
 

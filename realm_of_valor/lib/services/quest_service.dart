@@ -1,13 +1,9 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:geolocator/geolocator.dart';
-import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/quest_model.dart';
-import '../models/character_model.dart';
-import '../models/battle_model.dart';
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 
 class QuestService {
   static final QuestService _instance = QuestService._internal();
@@ -29,17 +25,14 @@ class QuestService {
   // Get current location
   Future<Position?> getCurrentLocation() async {
     try {
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        final requestPermission = await Geolocator.requestPermission();
-        if (requestPermission == LocationPermission.denied) {
-          return null;
-        }
-      }
-
-      return await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
       );
+      print('Current location: ${position.latitude}, ${position.longitude}');
+      return position;
     } catch (e) {
       print('Error getting location: $e');
       return null;
@@ -247,8 +240,6 @@ class QuestService {
 
   // Find nearby points of interest
   Future<List<QuestLocation>> _findNearbyPointsOfInterest(Position userLocation) async {
-    final locations = <QuestLocation>[];
-    
     // In a real implementation, you'd use Google Places API or similar
     // For now, generate some sample locations
     final sampleLocations = [

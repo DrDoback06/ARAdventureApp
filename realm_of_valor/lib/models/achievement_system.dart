@@ -810,7 +810,7 @@ class AchievementSystem {
         requirements: {'daily_steps': 5000, 'locations_visited': 2},
         rewards: {'xp': 200, 'gold': 100, 'cards': ['daily_reward_box']},
         points: 20,
-        metadata: {'expires_at': today.add(Duration(days: 1)).toIso8601String()},
+        metadata: {'expires_at': today.add(const Duration(days: 1)).toIso8601String()},
       ),
       Achievement(
         id: 'daily_collection_${today.day}_${today.month}',
@@ -821,7 +821,7 @@ class AchievementSystem {
         requirements: {'daily_cards_found': 3},
         rewards: {'xp': 300, 'gold': 150, 'cards': ['collection_boost']},
         points: 30,
-        metadata: {'expires_at': today.add(Duration(days: 1)).toIso8601String()},
+        metadata: {'expires_at': today.add(const Duration(days: 1)).toIso8601String()},
       ),
     ];
   }

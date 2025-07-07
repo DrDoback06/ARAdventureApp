@@ -1,6 +1,5 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:realm_of_valor/models/card_model.dart';
-import 'package:realm_of_valor/models/character_model.dart';
 import 'package:realm_of_valor/models/adventure_system.dart';
 import 'package:uuid/uuid.dart';
 

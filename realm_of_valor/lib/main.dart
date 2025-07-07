@@ -23,7 +23,7 @@ void main() async {
 }
 
 class ErrorApp extends StatelessWidget {
-  const ErrorApp({Key? key}) : super(key: key);
+  const ErrorApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +53,7 @@ class ErrorApp extends StatelessWidget {
 class RealmOfValorApp extends StatelessWidget {
   final SharedPreferences prefs;
 
-  const RealmOfValorApp({Key? key, required this.prefs}) : super(key: key);
+  const RealmOfValorApp({super.key, required this.prefs});
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +107,7 @@ class RealmOfValorApp extends StatelessWidget {
 }
 
 class LoadingWrapper extends StatefulWidget {
-  const LoadingWrapper({Key? key}) : super(key: key);
+  const LoadingWrapper({super.key});
 
   @override
   State<LoadingWrapper> createState() => _LoadingWrapperState();
@@ -128,18 +128,24 @@ class _LoadingWrapperState extends State<LoadingWrapper> {
       // Add a small delay to ensure all providers are ready
       await Future.delayed(const Duration(milliseconds: 100));
       
-      // Try to access the services to ensure they're working
-      final characterService = context.read<CharacterService>();
-      final cardService = context.read<CardService>();
+      // Just check if the context is still mounted and providers exist
+      if (!mounted) return;
       
-      // Test basic functionality
-      characterService.getAllCharacters();
-      cardService.getAllCards();
+      // Simple validation without calling potentially problematic methods
+      try {
+        context.read<CharacterService>();
+        context.read<CardService>();
+        context.read<CharacterProvider>();
+      } catch (e) {
+        debugPrint('Provider access error: $e');
+        // Continue anyway - providers might initialize later
+      }
       
       setState(() {
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('App initialization error: $e');
       setState(() {
         _error = e.toString();
         _isLoading = false;

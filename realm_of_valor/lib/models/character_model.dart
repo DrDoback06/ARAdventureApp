@@ -223,7 +223,7 @@ class GameCharacter {
         inventory = inventory ?? <CardInstance>[],
         stash = stash ?? <CardInstance>[],
         skills = skills ?? <Skill>[],
-        skillSlots = skillSlots ?? List.filled(8, null, growable: false).cast<CardInstance>(),
+        skillSlots = skillSlots ?? <CardInstance>[],
         createdAt = createdAt ?? DateTime.now(),
         lastPlayed = lastPlayed ?? DateTime.now(),
         characterData = characterData ?? <String, dynamic>{};

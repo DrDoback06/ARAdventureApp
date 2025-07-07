@@ -5,7 +5,6 @@ import 'package:health/health.dart';
 import 'package:pedometer/pedometer.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../models/physical_activity_model.dart';
-import '../models/character_model.dart';
 import 'dart:convert';
 
 class PhysicalActivityService {
@@ -283,10 +282,7 @@ class PhysicalActivityService {
 
   // Handle goal completion
   Future<void> _handleGoalCompletion(FitnessGoal goal) async {
-    // Award rewards for completing the goal
-    final rewards = goal.rewards;
-    
-    // Apply stat boosts
+    // Apply stat boosts directly without storing unused rewards variable
     final completionBoosts = StatBoost.getActivityBoosts(goal.type, 2);
     
     if (_currentProfile != null) {
@@ -432,22 +428,23 @@ class PhysicalActivityService {
   List<HealthMetrics> _processHealthDataToMetrics(List<HealthDataPoint> healthData) {
     final metrics = <HealthMetrics>[];
     
-    for (final point in healthData) {
-      final value = point.value;
-      final numericValue = value is HealthValue ? 
-        (value.numericValue ?? 0.0) : 
-        (value as num).toDouble();
-        
-      final metric = HealthMetrics(
-        steps: point.type == HealthDataType.STEPS ? numericValue.toInt() : 0,
-        distanceMeters: point.type == HealthDataType.DISTANCE_WALKING_RUNNING ? numericValue : 0,
-        heartRate: point.type == HealthDataType.HEART_RATE ? numericValue.toInt() : 0,
-        caloriesBurned: point.type == HealthDataType.ACTIVE_ENERGY_BURNED ? numericValue.toInt() : 0,
-        elevationGain: 0, // Would need additional data source
-        timestamp: point.dateFrom,
-      );
-      
-      metrics.add(metric);
+    if (healthData.isNotEmpty) {
+      for (var point in healthData) {
+        // Updated to use proper health data value access
+        if (point.value is NumericHealthValue) {
+          final numericValue = (point.value as NumericHealthValue).numericValue;
+          final metric = HealthMetrics(
+            steps: point.type == HealthDataType.STEPS ? numericValue.toInt() : 0,
+            distanceMeters: point.type == HealthDataType.DISTANCE_DELTA ? numericValue.toDouble() : 0.0,
+            heartRate: point.type == HealthDataType.HEART_RATE ? numericValue.toInt() : 0,
+            caloriesBurned: point.type == HealthDataType.ACTIVE_ENERGY_BURNED ? numericValue.toInt() : 0,
+            elevationGain: 0, // Would need additional data source
+            timestamp: point.dateFrom,
+          );
+          
+          metrics.add(metric);
+        }
+      }
     }
     
     return metrics;

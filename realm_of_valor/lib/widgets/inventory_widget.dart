@@ -7,7 +7,7 @@ import '../constants/theme.dart';
 import 'card_widget.dart';
 
 class InventoryWidget extends StatefulWidget {
-  const InventoryWidget({Key? key}) : super(key: key);
+  const InventoryWidget({super.key});
 
   @override
   State<InventoryWidget> createState() => _InventoryWidgetState();
@@ -15,17 +15,11 @@ class InventoryWidget extends StatefulWidget {
 
 class _InventoryWidgetState extends State<InventoryWidget> with TickerProviderStateMixin {
   late TabController _tabController;
-  int _selectedTab = 0;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      setState(() {
-        _selectedTab = _tabController.index;
-      });
-    });
   }
 
   @override
@@ -367,7 +361,8 @@ class _InventoryWidgetState extends State<InventoryWidget> with TickerProviderSt
     String label,
   ) {
     return DragTarget<CardInstance>(
-      onAccept: (cardInstance) {
+      onAcceptWithDetails: (details) {
+        final cardInstance = details.data;
         if (cardInstance.card.equipmentSlot == slot) {
           provider.equipItem(cardInstance);
         }
@@ -469,7 +464,7 @@ class _InventoryWidgetState extends State<InventoryWidget> with TickerProviderSt
           );
         } else {
           return DragTarget<CardInstance>(
-            onAccept: (cardInstance) {
+            onAcceptWithDetails: (details) {
               // Handle inventory reordering if needed
             },
             builder: (context, candidateData, rejectedData) {

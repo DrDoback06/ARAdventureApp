@@ -3,6 +3,17 @@ import '../models/card_model.dart';
 import '../constants/theme.dart';
 
 class CardWidget extends StatelessWidget {
+  const CardWidget({
+    super.key,
+    required this.cardInstance,
+    this.width = 120,
+    this.height = 160,
+    this.onTap,
+    this.onLongPress,
+    this.showTooltip = true,
+    this.isSelected = false,
+  });
+
   final CardInstance cardInstance;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
@@ -10,17 +21,6 @@ class CardWidget extends StatelessWidget {
   final bool showTooltip;
   final double width;
   final double height;
-
-  const CardWidget({
-    Key? key,
-    required this.cardInstance,
-    this.onTap,
-    this.onLongPress,
-    this.isSelected = false,
-    this.showTooltip = true,
-    this.width = 120,
-    this.height = 160,
-  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {

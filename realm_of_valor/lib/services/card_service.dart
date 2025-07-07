@@ -6,15 +6,19 @@ import '../models/card_model.dart';
 class CardService {
   static const String _cardsKey = 'saved_cards';
   static const String _templatesKey = 'card_templates';
+  static const String _unlockedCardsKey = 'unlocked_cards';
   
   final SharedPreferences _prefs;
   final List<GameCard> _cards = [];
   final List<GameCard> _templates = [];
+  final List<String> _unlockedCardIds = [];
+  final Random _random = Random();
   
   CardService(this._prefs) {
     _loadCards();
     _loadTemplates();
     _initializeDefaultTemplates();
+    _loadUnlockedCards();
   }
   
   // CRUD Operations
@@ -262,30 +266,162 @@ class CardService {
   
   // Random Card Generation
   GameCard generateRandomCard() {
+    return generateEnhancedRandomCard();
+  }
+  
+  // Generate treasure chest with multiple cards
+  List<GameCard> generateTreasureChest(int cardCount) {
+    final cards = <GameCard>[];
+    for (int i = 0; i < cardCount; i++) {
+      cards.add(generateRandomCard());
+    }
+    return cards;
+  }
+  
+  // Enhanced card generation using the amazing database
+  GameCard generateEnhancedRandomCard() {
+    // Create amazing cards from the database instead of basic ones
     final random = Random();
-    final types = CardType.values;
-    final rarities = CardRarity.values;
-    final classes = CharacterClass.values;
+    final epicCards = [
+      // Legendary Weapons
+      GameCard(
+        name: 'Excalibur, Blade of Kings',
+        description: 'A legendary sword that gleams with ancient power. +50 ATK, +20 DEF.',
+        type: CardType.weapon,
+        rarity: CardRarity.legendary,
+        cost: 12,
+        statModifiers: [
+          StatModifier(statName: 'attack', value: 50),
+          StatModifier(statName: 'defense', value: 20),
+        ],
+        levelRequirement: 25,
+        equipmentSlot: EquipmentSlot.weapon1,
+      ),
+      GameCard(
+        name: 'Shadowfang Dagger',
+        description: 'Forged in the depths of shadow. +35 ATK, +15 AGI. Poison on critical hits.',
+        type: CardType.weapon,
+        rarity: CardRarity.epic,
+        cost: 8,
+        statModifiers: [
+          StatModifier(statName: 'attack', value: 35),
+          StatModifier(statName: 'dexterity', value: 15),
+        ],
+        levelRequirement: 15,
+        equipmentSlot: EquipmentSlot.weapon1,
+      ),
+      GameCard(
+        name: 'Storm Hammer Mjolnir',
+        description: 'Thunder crashes with every swing. +45 ATK, +25 STR. Lightning damage.',
+        type: CardType.weapon,
+        rarity: CardRarity.legendary,
+        cost: 11,
+        statModifiers: [
+          StatModifier(statName: 'attack', value: 45),
+          StatModifier(statName: 'strength', value: 25),
+        ],
+        levelRequirement: 20,
+        equipmentSlot: EquipmentSlot.weapon1,
+      ),
+      // Epic Armor
+      GameCard(
+        name: 'Ancient Dragon Scale Mail',
+        description: 'Forged from dragon scales. +60 DEF, +30 HP. Fire immunity.',
+        type: CardType.armor,
+        rarity: CardRarity.mythic,
+        cost: 15,
+        statModifiers: [
+          StatModifier(statName: 'defense', value: 60),
+          StatModifier(statName: 'vitality', value: 30),
+        ],
+        levelRequirement: 30,
+        equipmentSlot: EquipmentSlot.armor,
+      ),
+      GameCard(
+        name: 'Arcane Silk Robes',
+        description: 'Woven with magical threads. +15 DEF, +25 INT, +20 MP.',
+        type: CardType.armor,
+        rarity: CardRarity.uncommon,
+        cost: 5,
+        statModifiers: [
+          StatModifier(statName: 'defense', value: 15),
+          StatModifier(statName: 'energy', value: 25),
+        ],
+        levelRequirement: 8,
+        equipmentSlot: EquipmentSlot.armor,
+      ),
+      // Powerful Spells
+      GameCard(
+        name: 'Meteor Storm',
+        description: 'Rain fiery destruction from the heavens. Deals 80 damage to all enemies.',
+        type: CardType.spell,
+        rarity: CardRarity.legendary,
+        cost: 10,
+        statModifiers: [
+          StatModifier(statName: 'attack', value: 80),
+        ],
+        levelRequirement: 22,
+      ),
+      GameCard(
+        name: 'Divine Healing Light',
+        description: 'Restore 50 HP and cure all ailments.',
+        type: CardType.spell,
+        rarity: CardRarity.rare,
+        cost: 6,
+        statModifiers: [
+          StatModifier(statName: 'healing', value: 50),
+        ],
+        levelRequirement: 12,
+      ),
+      // Rare Consumables
+      GameCard(
+        name: 'Elixir of Eternal Life',
+        description: 'Restore full HP and gain temporary invulnerability.',
+        type: CardType.consumable,
+        rarity: CardRarity.mythic,
+        cost: 20,
+        statModifiers: [
+          StatModifier(statName: 'healing', value: 999),
+        ],
+        levelRequirement: 35,
+        maxStack: 1,
+      ),
+      GameCard(
+        name: 'Phoenix Rising Potion',
+        description: 'Instantly revive with full health and +50% damage for 5 minutes.',
+        type: CardType.consumable,
+        rarity: CardRarity.legendary,
+        cost: 12,
+        statModifiers: [
+          StatModifier(statName: 'revival', value: 1),
+        ],
+        levelRequirement: 18,
+        maxStack: 3,
+      ),
+    ];
     
-    final type = types[random.nextInt(types.length)];
-    final rarity = rarities[random.nextInt(rarities.length)];
-    
-    final name = _generateRandomName(type, rarity);
-    final description = _generateRandomDescription(type);
-    
-    return GameCard(
-      name: name,
-      description: description,
-      type: type,
-      rarity: rarity,
-      equipmentSlot: _getRandomEquipmentSlot(type),
-      levelRequirement: random.nextInt(50) + 1,
-      cost: random.nextInt(1000) + 10,
-      statModifiers: _generateRandomStatModifiers(type, rarity),
-      allowedClasses: random.nextBool() 
-          ? {classes[random.nextInt(classes.length)]}
-          : <CharacterClass>{},
-    );
+    // Weighted selection based on rarity
+    final randomValue = random.nextDouble();
+    if (randomValue < 0.1) {
+      // 10% chance for epic+ cards
+      final epicFiltered = epicCards.where((card) => 
+        card.rarity == CardRarity.legendary || 
+        card.rarity == CardRarity.mythic || 
+        card.rarity == CardRarity.epic
+      ).toList();
+      return epicFiltered[random.nextInt(epicFiltered.length)];
+    } else if (randomValue < 0.3) {
+      // 20% chance for rare+ cards
+      final rareFiltered = epicCards.where((card) => 
+        card.rarity == CardRarity.rare || 
+        card.rarity == CardRarity.epic ||
+        card.rarity == CardRarity.legendary
+      ).toList();
+      return rareFiltered.isNotEmpty ? rareFiltered[random.nextInt(rareFiltered.length)] : epicCards[random.nextInt(epicCards.length)];
+    } else {
+      // 70% chance for any card
+      return epicCards[random.nextInt(epicCards.length)];
+    }
   }
   
   // Private helper methods
@@ -464,5 +600,32 @@ class CardService {
     }
     
     return modifiers;
+  }
+  
+  void _loadUnlockedCards() {
+    final unlockedJson = _prefs.getString(_unlockedCardsKey);
+    if (unlockedJson != null) {
+      final List<dynamic> unlocked = jsonDecode(unlockedJson);
+      _unlockedCardIds.clear();
+      _unlockedCardIds.addAll(unlocked.cast<String>());
+    }
+  }
+  
+  Future<void> _saveUnlockedCards() async {
+    final unlockedJson = jsonEncode(_unlockedCardIds);
+    await _prefs.setString(_unlockedCardsKey, unlockedJson);
+  }
+  
+  List<String> get unlockedCardIds => List.unmodifiable(_unlockedCardIds);
+  
+  Future<void> unlockCard(String cardId) async {
+    if (!_unlockedCardIds.contains(cardId)) {
+      _unlockedCardIds.add(cardId);
+      await _saveUnlockedCards();
+    }
+  }
+  
+  bool isCardUnlocked(String cardId) {
+    return _unlockedCardIds.contains(cardId);
   }
 }

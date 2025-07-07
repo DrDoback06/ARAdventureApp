@@ -11,7 +11,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({Key? key}) : super(key: key);
+  const HomeScreen({super.key});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -283,7 +283,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildQuickActionsCard(CharacterProvider provider) {
+  Widget _buildQuickActionsCard(CharacterProvider characterProvider) {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -293,64 +293,39 @@ class _HomeScreenState extends State<HomeScreen> {
             const Text(
               'Quick Actions',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: RealmOfValorTheme.accentGold,
+                color: RealmOfValorTheme.textPrimary,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Scan QR',
-                    Icons.qr_code_scanner,
-                    () => _scanQRCode(),
-                  ),
+                _buildQuickActionButton(
+                  'Add Item',
+                  Icons.add_box,
+                  () => _showQuickAddItemDialog(characterProvider),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Find Loot',
-                    Icons.search,
-                    () => _findRandomLoot(provider),
-                  ),
+                _buildQuickActionButton(
+                  'Add XP',
+                  Icons.trending_up,
+                  () => _addTestExperience(characterProvider),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Quick Duel',
-                    Icons.sports_martial_arts,
-                    () => _startQuickDuel(provider),
-                  ),
+                _buildQuickActionButton(
+                  'Scan QR',
+                  Icons.qr_code_scanner,
+                  _scanQRCode,
                 ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Rest at Inn',
-                    Icons.hotel,
-                    () => _restAtInn(provider),
-                  ),
+                _buildQuickActionButton(
+                  'Rest',
+                  Icons.local_hotel,
+                  () => _restAtInn(characterProvider),
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Train Skills',
-                    Icons.fitness_center,
-                    () => _trainSkills(provider),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildQuickActionButton(
-                    'Merchant',
-                    Icons.store,
-                    () => _visitMerchant(provider),
-                  ),
+                _buildQuickActionButton(
+                  'Shop',
+                  Icons.store,
+                  () => _visitShop(characterProvider),
                 ),
               ],
             ),
@@ -530,6 +505,39 @@ class _HomeScreenState extends State<HomeScreen> {
         );
       }
     });
+  }
+
+  void _addTestExperience(CharacterProvider provider) async {
+    try {
+      final character = provider.currentCharacter;
+      if (character == null) return;
+      
+      print('Before XP: ${character.experience}/${character.experienceToNext}, Level: ${character.level}');
+      
+      final success = await provider.addExperience(100, source: 'Test');
+      
+      final updatedCharacter = provider.currentCharacter;
+      if (updatedCharacter != null) {
+        print('After XP: ${updatedCharacter.experience}/${updatedCharacter.experienceToNext}, Level: ${updatedCharacter.level}');
+      }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Added 100 XP!' : 'Failed to add XP'),
+          backgroundColor: success ? RealmOfValorTheme.experienceGreen : Colors.red,
+        ),
+      );
+    } catch (e) {
+      print('Error adding test XP: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   Widget _buildStatColumn(String label, dynamic value) {
@@ -828,67 +836,298 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildAchievementsCard(GameCharacter character) {
-    final achievements = _getCharacterAchievements(character);
-    
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Achievements',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: RealmOfValorTheme.accentGold,
-              ),
-            ),
-            const SizedBox(height: 12),
             Row(
-              children: achievements.map((achievement) => 
-                Expanded(
-                  child: _buildAchievementBadge(
-                    achievement['title'],
-                    achievement['icon'],
-                    achievement['unlocked'],
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Achievements',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
                   ),
                 ),
-              ).toList(),
+                GestureDetector(
+                  onTap: () => _showAllAchievements(character),
+                  child: const Text(
+                    'View All',
+                    style: TextStyle(
+                      color: RealmOfValorTheme.accentGold,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 12),
+            // Recent Achievement Unlocks
+            _buildRecentAchievements(character),
+            const SizedBox(height: 8),
+            // Achievement Progress Summary
+            _buildAchievementProgress(character),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildAchievementBadge(String title, IconData icon, bool unlocked) {
+  
+  Widget _buildRecentAchievements(GameCharacter character) {
+    final recentAchievements = _getRecentAchievements(character);
+    
+    if (recentAchievements.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: RealmOfValorTheme.surfaceLight,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Row(
+          children: [
+            Icon(Icons.emoji_events, color: RealmOfValorTheme.textSecondary),
+            SizedBox(width: 8),
+            Text(
+              'Complete quests to unlock achievements!',
+              style: TextStyle(color: RealmOfValorTheme.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+    
+    return Column(
+      children: recentAchievements.take(3).map((achievement) =>
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: RealmOfValorTheme.surfaceLight,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: RealmOfValorTheme.accentGold.withOpacity(0.3)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: RealmOfValorTheme.accentGold,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(
+                  achievement['icon'] as IconData,
+                  color: RealmOfValorTheme.primaryDark,
+                  size: 18,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      achievement['title'] as String,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: RealmOfValorTheme.accentGold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    Text(
+                      achievement['description'] as String,
+                      style: const TextStyle(
+                        color: RealmOfValorTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (achievement['unlocked'] as bool)
+                const Icon(
+                  Icons.check_circle,
+                  color: RealmOfValorTheme.accentGold,
+                  size: 20,
+                ),
+            ],
+          ),
+        ),
+      ).toList(),
+    );
+  }
+  
+  Widget _buildAchievementProgress(GameCharacter character) {
+    final stats = _getAchievementStats(character);
+    
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 4),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: unlocked ? RealmOfValorTheme.accentGold : RealmOfValorTheme.surfaceLight,
+        color: RealmOfValorTheme.surfaceMedium,
         borderRadius: BorderRadius.circular(8),
       ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: [
+          _buildProgressStat('Unlocked', '${stats['unlocked']}/${stats['total']}', Icons.emoji_events),
+          _buildProgressStat('Collection', '${stats['collection']}%', Icons.library_books),
+          _buildProgressStat('Combat', '${stats['combat']}%', Icons.sports_martial_arts),
+          _buildProgressStat('Fitness', '${stats['fitness']}%', Icons.fitness_center),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildProgressStat(String label, String value, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: RealmOfValorTheme.accentGold, size: 20),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            color: RealmOfValorTheme.textPrimary,
+            fontSize: 14,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: RealmOfValorTheme.textSecondary,
+            fontSize: 10,
+          ),
+        ),
+      ],
+    );
+  }
+  
+  void _showAllAchievements(GameCharacter character) {
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.9,
+          height: MediaQuery.of(context).size.height * 0.8,
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Achievements',
+                    style: TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                      color: RealmOfValorTheme.accentGold,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: _buildAchievementCategories(character),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildAchievementCategories(GameCharacter character) {
+    return DefaultTabController(
+      length: 5,
       child: Column(
         children: [
-          Icon(
-            icon,
-            color: unlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
-            size: 24,
+          const TabBar(
+            isScrollable: true,
+            tabs: [
+              Tab(text: 'Collection', icon: Icon(Icons.library_books)),
+              Tab(text: 'Combat', icon: Icon(Icons.sports_martial_arts)),
+              Tab(text: 'Fitness', icon: Icon(Icons.fitness_center)),
+              Tab(text: 'Social', icon: Icon(Icons.people)),
+              Tab(text: 'Secret', icon: Icon(Icons.help_outline)),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              color: unlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
-              fontSize: 10,
-              fontWeight: FontWeight.bold,
+          Expanded(
+            child: TabBarView(
+              children: [
+                _buildAchievementList(_getCollectionAchievements(character)),
+                _buildAchievementList(_getCombatAchievements(character)),
+                _buildAchievementList(_getFitnessAchievements(character)),
+                _buildAchievementList(_getSocialAchievements(character)),
+                _buildAchievementList(_getSecretAchievements(character)),
+              ],
             ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),
+    );
+  }
+  
+  Widget _buildAchievementList(List<Map<String, dynamic>> achievements) {
+    return ListView.builder(
+      itemCount: achievements.length,
+      itemBuilder: (context, index) {
+        final achievement = achievements[index];
+        final isUnlocked = achievement['unlocked'] as bool;
+        
+        return Container(
+          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+          child: Card(
+            color: isUnlocked ? RealmOfValorTheme.accentGold.withOpacity(0.1) : null,
+            child: ListTile(
+              leading: Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isUnlocked ? RealmOfValorTheme.accentGold : RealmOfValorTheme.surfaceLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Icon(
+                  achievement['icon'] as IconData,
+                  color: isUnlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
+                ),
+              ),
+              title: Text(
+                achievement['title'] as String,
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isUnlocked ? RealmOfValorTheme.accentGold : RealmOfValorTheme.textPrimary,
+                ),
+              ),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(achievement['description'] as String),
+                  if (achievement['progress'] != null)
+                    Container(
+                      margin: const EdgeInsets.only(top: 4),
+                      child: LinearProgressIndicator(
+                        value: (achievement['progress'] as int) / 100.0,
+                        backgroundColor: RealmOfValorTheme.surfaceLight,
+                        valueColor: const AlwaysStoppedAnimation(RealmOfValorTheme.accentGold),
+                      ),
+                    ),
+                ],
+              ),
+              trailing: isUnlocked 
+                  ? const Icon(Icons.check_circle, color: RealmOfValorTheme.accentGold)
+                  : Text('${achievement['points']} pts'),
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -987,403 +1226,566 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildMapTab() {
-    return Padding(
-      padding: const EdgeInsets.all(16),
+    return Consumer<CharacterProvider>(
+      builder: (context, characterProvider, child) {
+        final character = characterProvider.currentCharacter;
+        
+        if (character == null) {
+          return const Center(
+            child: Text(
+              'Create a character to explore the world',
+              style: TextStyle(color: RealmOfValorTheme.textSecondary),
+            ),
+          );
+        }
+
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Location Header
+              _buildLocationHeader(),
+              
+              const SizedBox(height: 16),
+              
+              // Active Quests
+              _buildActiveQuestsSection(character, characterProvider),
+              
+              const SizedBox(height: 16),
+              
+              // Available Adventures
+              _buildAvailableAdventuresSection(character),
+              
+              const SizedBox(height: 16),
+              
+              // Daily Challenges
+              _buildDailyChallengesSection(character, characterProvider),
+              
+              const SizedBox(height: 16),
+              
+              // Special Events
+              _buildSpecialEventsSection(character),
+              
+              const SizedBox(height: 16),
+              
+              // QR Code Adventure
+              _buildQRAdventureSection(),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  
+  Widget _buildLocationHeader() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.location_on, color: RealmOfValorTheme.accentGold),
+                const SizedBox(width: 8),
+                const Text(
+                  'Current Location',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: () => _refreshLocation(),
+                  icon: const Icon(Icons.refresh, color: RealmOfValorTheme.accentGold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Adventure Town Central Plaza',
+              style: TextStyle(
+                fontSize: 16,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+            const Text(
+              'A bustling center of activity where adventurers gather',
+              style: TextStyle(color: RealmOfValorTheme.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildLocationButton('Explore Area', Icons.explore, () => _exploreCurrentArea()),
+                const SizedBox(width: 8),
+                _buildLocationButton('Find Nearby', Icons.search, () => _findNearbyLocations()),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildLocationButton(String label, IconData icon, VoidCallback onPressed) {
+    return Expanded(
+      child: ElevatedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 16),
+        label: Text(label),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: RealmOfValorTheme.primaryLight,
+          foregroundColor: RealmOfValorTheme.accentGold,
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildActiveQuestsSection(GameCharacter character, CharacterProvider provider) {
+    final activeQuests = _getActiveQuests(character);
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Active Quests',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  '${activeQuests.length}/5',
+                  style: const TextStyle(color: RealmOfValorTheme.textSecondary),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (activeQuests.isEmpty)
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: RealmOfValorTheme.surfaceLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.assignment, color: RealmOfValorTheme.textSecondary),
+                    SizedBox(width: 8),
+                    Text(
+                      'No active quests. Start an adventure below!',
+                      style: TextStyle(color: RealmOfValorTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ...activeQuests.map((quest) => _buildQuestCard(quest, provider)),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildQuestCard(Map<String, dynamic> quest, CharacterProvider provider) {
+    final progress = quest['progress'] as int;
+    final maxProgress = quest['maxProgress'] as int;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: RealmOfValorTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: RealmOfValorTheme.accentGold.withOpacity(0.3)),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Adventure Map',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: RealmOfValorTheme.accentGold,
+          Row(
+            children: [
+              Icon(
+                quest['icon'] as IconData,
+                color: RealmOfValorTheme.accentGold,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  quest['title'] as String,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                quest['difficulty'] as String,
+                style: TextStyle(
+                  color: _getDifficultyColor(quest['difficulty'] as String),
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            quest['description'] as String,
+            style: const TextStyle(color: RealmOfValorTheme.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: LinearProgressIndicator(
+                  value: progress / maxProgress,
+                  backgroundColor: RealmOfValorTheme.surfaceMedium,
+                  valueColor: const AlwaysStoppedAnimation(RealmOfValorTheme.accentGold),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '$progress/$maxProgress',
+                style: const TextStyle(
+                  color: RealmOfValorTheme.textSecondary,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Icon(Icons.star, color: RealmOfValorTheme.accentGold, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                '+${quest['expReward']} XP',
+                style: const TextStyle(color: RealmOfValorTheme.textSecondary, fontSize: 12),
+              ),
+              const SizedBox(width: 12),
+              Icon(Icons.inventory, color: RealmOfValorTheme.accentGold, size: 16),
+              const SizedBox(width: 4),
+              Text(
+                '${quest['itemRewards']} items',
+                style: const TextStyle(color: RealmOfValorTheme.textSecondary, fontSize: 12),
+              ),
+              const Spacer(),
+              if (progress >= maxProgress)
+                ElevatedButton(
+                  onPressed: () => _completeQuest(quest, provider),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: RealmOfValorTheme.accentGold,
+                    foregroundColor: RealmOfValorTheme.primaryDark,
+                    minimumSize: const Size(60, 30),
+                  ),
+                  child: const Text('Complete'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildAvailableAdventuresSection(GameCharacter character) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Available Adventures',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              childAspectRatio: 1.2,
+              children: [
+                _buildAdventureCard(
+                  'Enchanted Forest',
+                  'A magical forest filled with ancient secrets',
+                  Icons.forest,
+                  'Easy',
+                  () => _startAdventure('Enchanted Forest', character),
+                ),
+                _buildAdventureCard(
+                  'Crystal Caves',
+                  'Mysterious caves with precious gems',
+                  Icons.diamond,
+                  'Medium',
+                  () => _startAdventure('Crystal Caves', character),
+                ),
+                _buildAdventureCard(
+                  'Sky Temple',
+                  'Ancient temple floating in the clouds',
+                  Icons.cloud,
+                  'Hard',
+                  () => _startAdventure('Sky Temple', character),
+                ),
+                _buildAdventureCard(
+                  'Dragon\'s Lair',
+                  'Face the legendary Ancient Dragon',
+                  Icons.whatshot,
+                  'Legendary',
+                  () => _startAdventure('Dragon\'s Lair', character),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildDailyChallengesSection(GameCharacter character, CharacterProvider provider) {
+    final challenges = _getDailyChallenges(character);
+    
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text(
+                  'Daily Challenges',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
+                  ),
+                ),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: RealmOfValorTheme.accentGold,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text(
+                    'Resets in 12h',
+                    style: TextStyle(
+                      color: RealmOfValorTheme.primaryDark,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ...challenges.map((challenge) => _buildChallengeCard(challenge, provider)),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildChallengeCard(Map<String, dynamic> challenge, CharacterProvider provider) {
+    final isCompleted = challenge['completed'] as bool;
+    
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isCompleted ? RealmOfValorTheme.accentGold.withOpacity(0.1) : RealmOfValorTheme.surfaceLight,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isCompleted ? RealmOfValorTheme.accentGold : RealmOfValorTheme.surfaceLight,
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            challenge['icon'] as IconData,
+            color: isCompleted ? RealmOfValorTheme.accentGold : RealmOfValorTheme.textSecondary,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  challenge['title'] as String,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: isCompleted ? RealmOfValorTheme.accentGold : RealmOfValorTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  challenge['description'] as String,
+                  style: const TextStyle(
+                    color: RealmOfValorTheme.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          
-          // Map Header
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
+          if (isCompleted)
+            const Icon(Icons.check_circle, color: RealmOfValorTheme.accentGold)
+          else
+            Text(
+              '+${challenge['reward']} XP',
+              style: const TextStyle(
+                color: RealmOfValorTheme.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildSpecialEventsSection(GameCharacter character) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.event, color: RealmOfValorTheme.accentGold),
+                SizedBox(width: 8),
+                Text(
+                  'Special Events',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    RealmOfValorTheme.accentGold.withOpacity(0.2),
+                    RealmOfValorTheme.primaryLight.withOpacity(0.1),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: RealmOfValorTheme.accentGold.withOpacity(0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.explore, color: RealmOfValorTheme.accentGold, size: 32),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Explore the Realm',
+                  Row(
+                    children: [
+                      const Icon(Icons.celebration, color: RealmOfValorTheme.accentGold),
+                      const SizedBox(width: 8),
+                      const Text(
+                        'Winter Solstice Festival',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: RealmOfValorTheme.accentGold,
+                        ),
+                      ),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: RealmOfValorTheme.accentGold,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'LIMITED',
                           style: TextStyle(
-                            fontSize: 18,
+                            color: RealmOfValorTheme.primaryDark,
+                            fontSize: 10,
                             fontWeight: FontWeight.bold,
-                            color: RealmOfValorTheme.textPrimary,
                           ),
                         ),
-                        const SizedBox(height: 4),
-                        Consumer<CharacterProvider>(
-                          builder: (context, provider, child) {
-                            final character = provider.currentCharacter;
-                            return Text(
-                              character != null 
-                                  ? 'Current Location: Adventure Town'
-                                  : 'Select a character to explore',
-                              style: const TextStyle(
-                                color: RealmOfValorTheme.textSecondary,
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Celebrate the longest night with magical winter adventures! Double XP and exclusive winter-themed rewards.',
+                    style: TextStyle(color: RealmOfValorTheme.textSecondary),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: () => _joinSpecialEvent(),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: RealmOfValorTheme.accentGold,
+                      foregroundColor: RealmOfValorTheme.primaryDark,
                     ),
+                    child: const Text('Join Festival'),
                   ),
                 ],
               ),
             ),
-          ),
-          
-          const SizedBox(height: 16),
-          
-          // Available Adventures
-          Expanded(
-            child: Consumer<CharacterProvider>(
-              builder: (context, characterProvider, child) {
-                final character = characterProvider.currentCharacter;
-                
-                if (character == null) {
-                  return const Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.person_outline,
-                          size: 64,
-                          color: RealmOfValorTheme.textSecondary,
-                        ),
-                        SizedBox(height: 16),
-                        Text(
-                          'Create a character to explore!',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: RealmOfValorTheme.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-                
-                return ListView(
-                  children: [
-                    const Text(
-                      'Available Adventures',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: RealmOfValorTheme.accentGold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    
-                    _buildAdventureCard(
-                      'Enchanted Forest',
-                      'A mystical forest filled with magical creatures and hidden treasures.',
-                      Icons.forest,
-                      character.level >= 1,
-                      'Level 1+',
-                      () => _startAdventure('Enchanted Forest', character),
-                    ),
-                    
-                    _buildAdventureCard(
-                      'Crystal Caves',
-                      'Deep underground caverns with rare crystals and dangerous monsters.',
-                      Icons.terrain,
-                      character.level >= 5,
-                      'Level 5+',
-                      () => _startAdventure('Crystal Caves', character),
-                    ),
-                    
-                    _buildAdventureCard(
-                      'Sky Temple',
-                      'An ancient temple floating in the clouds, home to powerful artifacts.',
-                      Icons.temple_buddhist,
-                      character.level >= 10,
-                      'Level 10+',
-                      () => _startAdventure('Sky Temple', character),
-                    ),
-                    
-                    _buildAdventureCard(
-                      'Dragon\'s Lair',
-                      'The ultimate challenge - face the ancient dragon and claim its hoard.',
-                      Icons.whatshot,
-                      character.level >= 20,
-                      'Level 20+',
-                      () => _startAdventure('Dragon\'s Lair', character),
-                    ),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // QR Code Adventure
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          children: [
-                            const Icon(
-                              Icons.qr_code_scanner,
-                              size: 48,
-                              color: RealmOfValorTheme.accentGold,
-                            ),
-                            const SizedBox(height: 16),
-                            const Text(
-                              'Scan for Adventure',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: RealmOfValorTheme.textPrimary,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text(
-                              'Scan QR codes in the real world to discover hidden adventures!',
-                              style: TextStyle(
-                                color: RealmOfValorTheme.textSecondary,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            ElevatedButton.icon(
-                              onPressed: () => _scanQRCode(),
-                              icon: const Icon(Icons.camera_alt),
-                              label: const Text('Scan QR Code'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
-
-  Widget _buildAdventureCard(
-    String name,
-    String description,
-    IconData icon,
-    bool isUnlocked,
-    String requirement,
-    VoidCallback onTap,
-  ) {
+  
+  Widget _buildQRAdventureSection() {
     return Card(
-      child: ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: isUnlocked ? RealmOfValorTheme.accentGold : RealmOfValorTheme.surfaceLight,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(
-            icon,
-            color: isUnlocked ? RealmOfValorTheme.primaryDark : RealmOfValorTheme.textSecondary,
-          ),
-        ),
-        title: Text(
-          name,
-          style: TextStyle(
-            color: isUnlocked ? RealmOfValorTheme.textPrimary : RealmOfValorTheme.textSecondary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              description,
-              style: TextStyle(
-                color: isUnlocked ? RealmOfValorTheme.textSecondary : RealmOfValorTheme.textSecondary.withOpacity(0.7),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              requirement,
-              style: TextStyle(
-                color: isUnlocked ? RealmOfValorTheme.experienceGreen : RealmOfValorTheme.healthRed,
-                fontSize: 12,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        trailing: isUnlocked 
-            ? const Icon(Icons.play_arrow, color: RealmOfValorTheme.accentGold)
-            : const Icon(Icons.lock, color: RealmOfValorTheme.textSecondary),
-        onTap: isUnlocked ? onTap : null,
-      ),
-    );
-  }
-
-  void _startAdventure(String adventureName, GameCharacter character) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Start Adventure: $adventureName'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              Icons.explore,
-              size: 64,
-              color: RealmOfValorTheme.accentGold,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Are you ready to embark on this adventure with ${character.name}?',
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: RealmOfValorTheme.textPrimary),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Power Rating: ${_calculatePowerRating(character)}',
-              style: const TextStyle(
-                color: RealmOfValorTheme.accentGold,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Complete the adventure to gain experience and find treasure!',
-              style: TextStyle(
-                color: RealmOfValorTheme.textSecondary,
-                fontSize: 12,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _completeAdventure(adventureName, character);
-            },
-            child: const Text('Start Adventure'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _completeAdventure(String adventureName, GameCharacter character) {
-    final characterProvider = context.read<CharacterProvider>();
-    final cardService = context.read<CardService>();
-    
-    // Calculate rewards based on adventure and character level
-    int expReward = 100;
-    List<CardInstance>? itemRewards;
-    
-    switch (adventureName) {
-      case 'Enchanted Forest':
-        expReward = 100 + (character.level * 10);
-        break;
-      case 'Crystal Caves':
-        expReward = 200 + (character.level * 15);
-        if (DateTime.now().millisecond % 3 == 0) {
-          final crystal = cardService.createBasicConsumable(
-            name: 'Magic Crystal',
-            description: 'A glowing crystal that boosts mana',
-            effectType: 'mana_boost',
-            effectValue: 50,
-            rarity: CardRarity.rare,
-          );
-          itemRewards = [CardInstance(card: crystal)];
-        }
-        break;
-      case 'Sky Temple':
-        expReward = 350 + (character.level * 20);
-        if (DateTime.now().millisecond % 2 == 0) {
-          final artifact = cardService.generateRandomCard();
-          itemRewards = [CardInstance(card: artifact)];
-        }
-        break;
-      case 'Dragon\'s Lair':
-        expReward = 500 + (character.level * 25);
-        // Always get treasure from dragon
-        final treasure1 = cardService.generateRandomCard();
-        final treasure2 = cardService.generateRandomCard();
-        itemRewards = [CardInstance(card: treasure1), CardInstance(card: treasure2)];
-        break;
-    }
-    
-    // Complete the adventure with rewards
-    characterProvider.completeAdventure(adventureName, expReward, itemRewards);
-    
-    // Show completion dialog
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('$adventureName Complete!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
             const Icon(
-              Icons.celebration,
-              size: 64,
-              color: RealmOfValorTheme.experienceGreen,
+              Icons.qr_code_scanner,
+              size: 48,
+              color: RealmOfValorTheme.accentGold,
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Adventure completed successfully!',
-              style: const TextStyle(
-                fontSize: 16,
+            const SizedBox(height: 12),
+            const Text(
+              'Scan for Adventure',
+              style: TextStyle(
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: RealmOfValorTheme.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            Text(
-              'Gained $expReward XP!',
-              style: const TextStyle(
-                color: RealmOfValorTheme.experienceGreen,
-                fontWeight: FontWeight.bold,
+            const Text(
+              'Scan QR codes in the real world to discover hidden adventures, unlock exclusive items, and find secret treasures!',
+              style: TextStyle(color: RealmOfValorTheme.textSecondary),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _scanQRCode,
+              icon: const Icon(Icons.camera_alt),
+              label: const Text('Open Scanner'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: RealmOfValorTheme.accentGold,
+                foregroundColor: RealmOfValorTheme.primaryDark,
               ),
             ),
-            if (itemRewards != null) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Found ${itemRewards.length} treasure${itemRewards.length > 1 ? 's' : ''}!',
-                style: const TextStyle(
-                  color: RealmOfValorTheme.accentGold,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              ...itemRewards.map((item) => Text(
-                '• ${item.card.name}',
-                style: TextStyle(
-                  color: RealmOfValorTheme.getRarityColor(item.card.rarity),
-                  fontSize: 12,
-                ),
-              )),
-            ],
           ],
         ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Awesome!'),
-          ),
-        ],
       ),
     );
   }
@@ -1581,7 +1983,7 @@ class _HomeScreenState extends State<HomeScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 if (nameController.text.trim().isNotEmpty) {
                   final character = GameCharacter(
                     name: nameController.text.trim(),
@@ -1589,8 +1991,15 @@ class _HomeScreenState extends State<HomeScreen> {
                     availableStatPoints: 5,
                     availableSkillPoints: 1,
                   );
-                  provider.createCharacter(character);
+                  await provider.createCharacter(character);
                   Navigator.pop(context);
+                  // Show success message
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Character ${character.name} created successfully!'),
+                      backgroundColor: RealmOfValorTheme.accentGold,
+                    ),
+                  );
                 }
               },
               child: const Text('Create'),
@@ -1650,161 +2059,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showAddExperienceDialog(CharacterProvider provider) {
-    final expController = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Experience'),
-        content: TextField(
-          controller: expController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Experience Points',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final exp = int.tryParse(expController.text);
-              if (exp != null && exp > 0) {
-                provider.addExperience(exp);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Added $exp experience points!')),
-                );
-              }
-            },
-            child: const Text('Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddItemDialog(CharacterProvider provider) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Item'),
-        content: SizedBox(
-          width: double.maxFinite,
-          height: 400,
-          child: Consumer<CardService>(
-            builder: (context, cardService, child) {
-              final availableCards = cardService.getAllCards();
-              
-              if (availableCards.isEmpty) {
-                return Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(
-                      Icons.inventory_2,
-                      size: 64,
-                      color: RealmOfValorTheme.textSecondary,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'No cards available',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: RealmOfValorTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Create some cards in the Card Editor first',
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: RealmOfValorTheme.textSecondary,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(context);
-                        setState(() => _selectedIndex = 2); // Switch to Card Editor
-                      },
-                      child: const Text('Go to Card Editor'),
-                    ),
-                  ],
-                );
-              }
-              
-              return ListView.builder(
-                itemCount: availableCards.length,
-                itemBuilder: (context, index) {
-                  final card = availableCards[index];
-                  return Card(
-                    child: ListTile(
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: RealmOfValorTheme.getRarityColor(card.rarity),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          _getCardTypeIcon(card.type),
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                      ),
-                      title: Text(
-                        card.name,
-                        style: TextStyle(
-                          color: RealmOfValorTheme.getRarityColor(card.rarity),
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      subtitle: Text(
-                        '${card.type.name.toUpperCase()} • ${card.rarity.name.toUpperCase()}',
-                        style: const TextStyle(
-                          color: RealmOfValorTheme.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.add, color: RealmOfValorTheme.accentGold),
-                        onPressed: () {
-                          final cardInstance = CardInstance(card: card);
-                          provider.addToInventory(cardInstance);
-                          Navigator.pop(context);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Added ${card.name} to inventory!')),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
-              );
-            },
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showQuickAddItemDialog(provider);
-            },
-            child: const Text('Quick Add'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showQuickAddItemDialog(CharacterProvider provider) {
     showDialog(
       context: context,
@@ -1837,15 +2091,47 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildQuickAddButton(String label, CardType type, CharacterProvider provider) {
     return ElevatedButton(
-      onPressed: () {
-        final cardService = context.read<CardService>();
-        final randomCard = cardService.generateRandomCard();
-        final cardInstance = CardInstance(card: randomCard);
-        provider.addToInventory(cardInstance);
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added ${randomCard.name} to inventory!')),
-        );
+      onPressed: () async {
+        try {
+          final cardService = context.read<CardService>();
+          final randomCard = cardService.generateRandomCard();
+          
+          if (randomCard.name.isEmpty) {
+            throw Exception('Invalid card generated');
+          }
+          
+          final cardInstance = CardInstance(card: randomCard);
+          final success = await provider.addToInventory(cardInstance);
+          
+          if (!mounted) return;
+          Navigator.pop(context);
+          
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Added ${randomCard.name} to inventory!'),
+                backgroundColor: RealmOfValorTheme.experienceGreen,
+              ),
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to add item - inventory may be full'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        } catch (e) {
+          print('Error adding item: $e');
+          if (!mounted) return;
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error adding item: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       },
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -1950,20 +2236,36 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _scanItemCard(CharacterProvider provider) {
-    final cardService = context.read<CardService>();
-    final randomCard = cardService.generateRandomCard();
-    final cardInstance = CardInstance(card: randomCard);
-    
-    provider.addToInventory(cardInstance);
-    provider.scanQRCode('item_${randomCard.id}');
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Scanned item: ${randomCard.name}'),
-        backgroundColor: RealmOfValorTheme.experienceGreen,
-      ),
-    );
+  void _scanItemCard(CharacterProvider provider) async {
+    try {
+      final cardService = context.read<CardService>();
+      final randomCard = cardService.generateRandomCard();
+      
+      if (randomCard.name.isEmpty) {
+        throw Exception('Invalid card generated');
+      }
+      
+      final cardInstance = CardInstance(card: randomCard);
+      final success = await provider.addToInventory(cardInstance);
+      await provider.scanQRCode('item_${randomCard.id}');
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(success ? 'Scanned item: ${randomCard.name}' : 'Failed to add scanned item'),
+          backgroundColor: success ? RealmOfValorTheme.experienceGreen : Colors.red,
+        ),
+      );
+    } catch (e) {
+      print('Error scanning item: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error scanning item: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   void _scanQuestCard(CharacterProvider provider) {
@@ -2208,7 +2510,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _visitMerchant(CharacterProvider provider) {
+  void _visitShop(CharacterProvider provider) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2547,6 +2849,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               final cardService = context.read<CardService>();
               final success = await cardService.importCards(controller.text);
+              if (!context.mounted) return;
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -2582,6 +2885,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 await cardService.createCard(randomCard);
               }
               
+              if (!context.mounted) return;
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('Sample cards generated successfully!')),
@@ -2610,6 +2914,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onPressed: () async {
               final prefs = context.read<SharedPreferences>();
               await prefs.clear();
+              if (!context.mounted) return;
               Navigator.pop(context);
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(content: Text('All data cleared! Please restart the app.')),
@@ -2655,4 +2960,699 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
+
+  List<Map<String, dynamic>> _getRecentAchievements(GameCharacter character) {
+    // Generate achievements based on character progress
+    final achievements = <Map<String, dynamic>>[];
+    
+    // Check character creation achievement
+    achievements.add({
+      'title': 'First Steps',
+      'description': 'Create your first character',
+      'icon': Icons.person_add,
+      'unlocked': true,
+      'points': 10,
+    });
+    
+    // Check level achievements
+    if (character.level >= 5) {
+      achievements.add({
+        'title': 'Apprentice',
+        'description': 'Reach level 5',
+        'icon': Icons.star,
+        'unlocked': true,
+        'points': 25,
+      });
+    }
+    
+    // Check inventory achievements
+    if (character.inventory.length >= 5) {
+      achievements.add({
+        'title': 'Collector',
+        'description': 'Collect 5 items',
+        'icon': Icons.inventory,
+        'unlocked': true,
+        'points': 15,
+      });
+    }
+    
+    return achievements;
+  }
+  
+  Map<String, int> _getAchievementStats(GameCharacter character) {
+    final totalAchievements = 50; // Total possible achievements
+    var unlockedCount = 1; // Started with character creation
+    
+    // Count unlocked achievements based on character progress
+    if (character.level >= 5) unlockedCount++;
+    if (character.level >= 10) unlockedCount++;
+    if (character.inventory.length >= 5) unlockedCount++;
+    if (character.inventory.length >= 10) unlockedCount++;
+    
+    return {
+      'unlocked': unlockedCount,
+      'total': totalAchievements,
+      'collection': ((character.inventory.length / 20) * 100).clamp(0, 100).round(),
+      'combat': (character.level * 10).clamp(0, 100),
+      'fitness': 25, // Basic fitness progress
+    };
+  }
+  
+  List<Map<String, dynamic>> _getCollectionAchievements(GameCharacter character) {
+    return [
+      {
+        'title': 'First Steps',
+        'description': 'Collect your first item',
+        'icon': Icons.inventory,
+        'unlocked': character.inventory.isNotEmpty,
+        'points': 10,
+        'progress': character.inventory.isNotEmpty ? 100 : 0,
+      },
+      {
+        'title': 'Growing Collection',
+        'description': 'Collect 5 different items',
+        'icon': Icons.collections,
+        'unlocked': character.inventory.length >= 5,
+        'points': 25,
+        'progress': ((character.inventory.length / 5) * 100).clamp(0, 100).round(),
+      },
+      {
+        'title': 'Serious Collector',
+        'description': 'Collect 10 different items',
+        'icon': Icons.library_books,
+        'unlocked': character.inventory.length >= 10,
+        'points': 50,
+        'progress': ((character.inventory.length / 10) * 100).clamp(0, 100).round(),
+      },
+      {
+        'title': 'Master Collector',
+        'description': 'Collect 25 different items',
+        'icon': Icons.diamond,
+        'unlocked': character.inventory.length >= 25,
+        'points': 100,
+        'progress': ((character.inventory.length / 25) * 100).clamp(0, 100).round(),
+      },
+      {
+        'title': 'Legendary Hoarder',
+        'description': 'Fill your entire inventory (40 items)',
+        'icon': Icons.star,
+        'unlocked': character.inventory.length >= 40,
+        'points': 200,
+        'progress': ((character.inventory.length / 40) * 100).clamp(0, 100).round(),
+      },
+    ];
+  }
+  
+  List<Map<String, dynamic>> _getCombatAchievements(GameCharacter character) {
+    return [
+      {
+        'title': 'First Victory',
+        'description': 'Win your first battle',
+        'icon': Icons.sports_martial_arts,
+        'unlocked': character.level > 1,
+        'points': 15,
+        'progress': character.level > 1 ? 100 : 0,
+      },
+      {
+        'title': 'Apprentice Fighter',
+        'description': 'Reach level 5',
+        'icon': Icons.security,
+        'unlocked': character.level >= 5,
+        'points': 25,
+        'progress': ((character.level / 5) * 100).clamp(0, 100).round(),
+      },
+      {
+        'title': 'Skilled Warrior',
+        'description': 'Reach level 10',
+        'icon': Icons.shield,
+        'unlocked': character.level >= 10,
+        'points': 50,
+        'progress': ((character.level / 10) * 100).clamp(0, 100).round(),
+      },
+      {
+        'title': 'Champion',
+        'description': 'Reach level 20',
+        'icon': Icons.emoji_events,
+        'unlocked': character.level >= 20,
+        'points': 100,
+        'progress': ((character.level / 20) * 100).clamp(0, 100).round(),
+      },
+      {
+        'title': 'Legendary Hero',
+        'description': 'Reach level 50',
+        'icon': Icons.star,
+        'unlocked': character.level >= 50,
+        'points': 500,
+        'progress': ((character.level / 50) * 100).clamp(0, 100).round(),
+      },
+    ];
+  }
+  
+  List<Map<String, dynamic>> _getFitnessAchievements(GameCharacter character) {
+    return [
+      {
+        'title': 'First Steps',
+        'description': 'Take your first 1,000 steps',
+        'icon': Icons.directions_walk,
+        'unlocked': false, // Would connect to fitness tracking
+        'points': 10,
+        'progress': 0,
+      },
+      {
+        'title': 'Daily Walker',
+        'description': 'Walk 10,000 steps in one day',
+        'icon': Icons.fitness_center,
+        'unlocked': false,
+        'points': 25,
+        'progress': 0,
+      },
+      {
+        'title': 'Marathon Master',
+        'description': 'Walk 42.2km total distance',
+        'icon': Icons.run_circle,
+        'unlocked': false,
+        'points': 100,
+        'progress': 0,
+      },
+      {
+        'title': 'Calorie Crusher',
+        'description': 'Burn 1,000 calories',
+        'icon': Icons.local_fire_department,
+        'unlocked': false,
+        'points': 50,
+        'progress': 0,
+      },
+      {
+        'title': 'Explorer Extraordinaire',
+        'description': 'Visit 100 different locations',
+        'icon': Icons.explore,
+        'unlocked': false,
+        'points': 200,
+        'progress': 0,
+      },
+    ];
+  }
+  
+  List<Map<String, dynamic>> _getSocialAchievements(GameCharacter character) {
+    return [
+      {
+        'title': 'Social Butterfly',
+        'description': 'Add your first friend',
+        'icon': Icons.person_add,
+        'unlocked': false,
+        'points': 15,
+        'progress': 0,
+      },
+      {
+        'title': 'Guild Member',
+        'description': 'Join your first guild',
+        'icon': Icons.groups,
+        'unlocked': false,
+        'points': 25,
+        'progress': 0,
+      },
+      {
+        'title': 'Team Player',
+        'description': 'Complete 5 guild quests',
+        'icon': Icons.emoji_events,
+        'unlocked': false,
+        'points': 50,
+        'progress': 0,
+      },
+      {
+        'title': 'Guild Leader',
+        'description': 'Create and lead your own guild',
+        'icon': Icons.star,
+        'unlocked': false,
+        'points': 100,
+        'progress': 0,
+      },
+      {
+        'title': 'Master Trader',
+        'description': 'Complete 50 trades with other players',
+        'icon': Icons.swap_horiz,
+        'unlocked': false,
+        'points': 75,
+        'progress': 0,
+      },
+    ];
+  }
+  
+  List<Map<String, dynamic>> _getSecretAchievements(GameCharacter character) {
+    return [
+      {
+        'title': 'Night Owl',
+        'description': 'Play between midnight and 4 AM',
+        'icon': Icons.nightlight_round,
+        'unlocked': false,
+        'points': 25,
+        'progress': 0,
+      },
+      {
+        'title': 'Early Bird',
+        'description': 'Start playing before 6 AM',
+        'icon': Icons.wb_sunny,
+        'unlocked': false,
+        'points': 25,
+        'progress': 0,
+      },
+      {
+        'title': 'Lucky Seven',
+        'description': 'Find 7 legendary items in a row',
+        'icon': Icons.casino,
+        'unlocked': false,
+        'points': 777,
+        'progress': 0,
+      },
+      {
+        'title': 'Speed Demon',
+        'description': 'Complete a quest in under 5 minutes',
+        'icon': Icons.speed,
+        'unlocked': false,
+        'points': 50,
+        'progress': 0,
+      },
+      {
+        'title': 'The Chosen One',
+        'description': 'Discover this secret achievement',
+        'icon': Icons.help_outline,
+        'unlocked': true, // Easter egg - always unlocked
+        'points': 1,
+        'progress': 100,
+      },
+    ];
+  }
+
+  void _refreshLocation() {
+    // TODO: Implement location refresh with GPS
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Location refreshed!')),
+    );
+  }
+  
+  void _exploreCurrentArea() {
+    // TODO: Implement area exploration
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Exploring the area... Found some interesting locations!')),
+    );
+  }
+  
+  void _findNearbyLocations() {
+    // TODO: Implement nearby location finder
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Scanning for nearby adventure locations...')),
+    );
+  }
+  
+  List<Map<String, dynamic>> _getActiveQuests(GameCharacter character) {
+    // Return sample active quests based on character level
+    final quests = <Map<String, dynamic>>[];
+    
+    // Starter quest for new characters
+    if (character.level < 5) {
+      quests.add({
+        'title': 'First Adventure',
+        'description': 'Collect 3 items to prove yourself as an adventurer',
+        'icon': Icons.star,
+        'difficulty': 'Easy',
+        'progress': character.inventory.length,
+        'maxProgress': 3,
+        'expReward': 100,
+        'itemRewards': 1,
+      });
+    }
+    
+    // Add level-based quests
+    if (character.level >= 3) {
+      quests.add({
+        'title': 'Equipment Master',
+        'description': 'Equip 5 different weapons or armor pieces',
+        'icon': Icons.shield,
+        'difficulty': 'Medium',
+        'progress': character.equipment.getAllEquippedItems().length,
+        'maxProgress': 5,
+        'expReward': 200,
+        'itemRewards': 2,
+      });
+    }
+    
+    return quests;
+  }
+  
+  Color _getDifficultyColor(String difficulty) {
+    switch (difficulty.toLowerCase()) {
+      case 'easy':
+        return RealmOfValorTheme.experienceGreen;
+      case 'medium':
+        return RealmOfValorTheme.accentGold;
+      case 'hard':
+        return Colors.orange;
+      case 'legendary':
+        return RealmOfValorTheme.healthRed;
+      default:
+        return RealmOfValorTheme.textSecondary;
+    }
+  }
+  
+  void _completeQuest(Map<String, dynamic> quest, CharacterProvider provider) async {
+    try {
+      final character = provider.currentCharacter!;
+      final expReward = quest['expReward'] as int;
+      
+      // Add experience first
+      final expSuccess = await provider.addExperience(expReward);
+      
+      // Generate reward items
+      final cardService = context.read<CardService>();
+      final itemCount = quest['itemRewards'] as int;
+      int itemsAdded = 0;
+      
+      for (int i = 0; i < itemCount; i++) {
+        final randomCard = cardService.generateRandomCard();
+        if (randomCard.name.isNotEmpty) {
+          final success = await provider.addToInventory(CardInstance(card: randomCard));
+          if (success) itemsAdded++;
+        }
+      }
+      
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Quest completed! Gained $expReward XP and $itemsAdded items!'),
+          backgroundColor: RealmOfValorTheme.experienceGreen,
+        ),
+      );
+    } catch (e) {
+      print('Error completing quest: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error completing quest: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+  
+  Widget _buildAdventureCard(
+    String name,
+    String description,
+    IconData icon,
+    String difficulty,
+    VoidCallback onTap,
+  ) {
+    return Card(
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(8),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: RealmOfValorTheme.accentGold.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(24),
+                ),
+                child: Icon(
+                  icon,
+                  color: RealmOfValorTheme.accentGold,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                name,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: RealmOfValorTheme.textPrimary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                description,
+                style: const TextStyle(
+                  color: RealmOfValorTheme.textSecondary,
+                  fontSize: 12,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: _getDifficultyColor(difficulty),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  difficulty,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  void _startAdventure(String adventureName, GameCharacter character) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Start Adventure: $adventureName'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.explore,
+              size: 64,
+              color: RealmOfValorTheme.accentGold,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Are you ready to embark on this adventure with ${character.name}?',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: RealmOfValorTheme.textPrimary),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Character Level: ${character.level}',
+              style: const TextStyle(
+                color: RealmOfValorTheme.accentGold,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Complete the adventure to gain experience and find treasure!',
+              style: TextStyle(
+                color: RealmOfValorTheme.textSecondary,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _completeAdventure(adventureName, character);
+            },
+            child: const Text('Start Adventure'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  void _completeAdventure(String adventureName, GameCharacter character) async {
+    final characterProvider = context.read<CharacterProvider>();
+    final cardService = context.read<CardService>();
+    
+    // Calculate rewards based on adventure and character level
+    int expReward = 100;
+    List<GameCard> itemRewards = [];
+    
+    switch (adventureName) {
+      case 'Enchanted Forest':
+        expReward = 100 + (character.level * 10);
+        break;
+      case 'Crystal Caves':
+        expReward = 200 + (character.level * 15);
+        if (DateTime.now().millisecond % 3 == 0) {
+          final crystal = cardService.createBasicConsumable(
+            name: 'Magic Crystal',
+            description: 'A glowing crystal that boosts mana',
+            effectType: 'mana_boost',
+            effectValue: 50,
+            rarity: CardRarity.rare,
+          );
+          itemRewards.add(crystal);
+        }
+        break;
+      case 'Sky Temple':
+        expReward = 350 + (character.level * 20);
+        if (DateTime.now().millisecond % 2 == 0) {
+          final artifact = cardService.generateRandomCard();
+          itemRewards.add(artifact);
+        }
+        break;
+      case 'Dragon\'s Lair':
+        expReward = 500 + (character.level * 25);
+        // Always get treasure from dragon
+        final treasure1 = cardService.generateRandomCard();
+        final treasure2 = cardService.generateRandomCard();
+        itemRewards.addAll([treasure1, treasure2]);
+        break;
+    }
+    
+    // Give rewards
+    await characterProvider.addExperience(expReward);
+    for (final item in itemRewards) {
+      if (item.name.isNotEmpty) {
+        await characterProvider.addToInventory(CardInstance(card: item));
+      }
+    }
+    
+    // Show completion dialog
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('$adventureName Complete!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.celebration,
+              size: 64,
+              color: RealmOfValorTheme.experienceGreen,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Adventure completed successfully!',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Gained $expReward XP!',
+              style: const TextStyle(
+                color: RealmOfValorTheme.experienceGreen,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            if (itemRewards.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Found ${itemRewards.length} treasure${itemRewards.length > 1 ? 's' : ''}!',
+                style: const TextStyle(
+                  color: RealmOfValorTheme.accentGold,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              ...itemRewards.map((item) => Text(
+                '• ${item.name}',
+                style: TextStyle(
+                  color: RealmOfValorTheme.getRarityColor(item.rarity),
+                  fontSize: 12,
+                ),
+              )),
+            ],
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Awesome!'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  List<Map<String, dynamic>> _getDailyChallenges(GameCharacter character) {
+    return [
+      {
+        'title': 'First Steps',
+        'description': 'Add 3 items to your inventory',
+        'icon': Icons.inventory,
+        'completed': character.inventory.length >= 3,
+        'reward': 50,
+      },
+      {
+        'title': 'Power Up',
+        'description': 'Gain 1 character level',
+        'icon': Icons.trending_up,
+        'completed': character.level >= 2,
+        'reward': 100,
+      },
+      {
+        'title': 'Explorer',
+        'description': 'Complete your first adventure',
+        'icon': Icons.explore,
+        'completed': false, // Would track adventure completion
+        'reward': 150,
+      },
+    ];
+  }
+  
+  void _joinSpecialEvent() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Winter Solstice Festival'),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.celebration,
+              size: 64,
+              color: RealmOfValorTheme.accentGold,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Welcome to the Winter Solstice Festival!',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'During this special event, you\'ll earn double XP from all activities and have access to exclusive winter-themed items and quests!',
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Let\'s Celebrate!'),
+          ),
+        ],
+      ),
+    );
+  }
+  
+
 }

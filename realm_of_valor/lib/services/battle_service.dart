@@ -1,9 +1,8 @@
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/battle_model.dart';
-import '../models/character_model.dart';
 import '../models/card_model.dart';
-import 'character_service.dart';
+import '../models/character_model.dart';
 import 'dart:convert';
 
 class BattleService {
@@ -11,7 +10,6 @@ class BattleService {
   factory BattleService() => _instance;
   BattleService._internal();
 
-  CharacterService? _characterService;
   final Random _random = Random();
 
   // Create a new battle

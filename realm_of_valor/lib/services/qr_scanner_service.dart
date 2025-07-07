@@ -1,12 +1,11 @@
-import 'package:flutter/material.dart';
-import 'package:qr_code_scanner/qr_code_scanner.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/card_model.dart';
 import '../models/battle_model.dart';
 import '../models/quest_model.dart';
-import '../models/character_model.dart';
-import 'card_service.dart';
 
 enum QRCardType {
   item,
@@ -33,11 +32,13 @@ class QRScanResult {
 }
 
 class QRScannerService {
-  static final QRScannerService _instance = QRScannerService._internal();
-  factory QRScannerService() => _instance;
+  static QRScannerService? _instance;
+  static Future<QRScannerService> getInstance() async {
+    _instance ??= QRScannerService._internal();
+    return _instance!;
+  }
+  
   QRScannerService._internal();
-
-  CardService? _cardService;
 
   Future<bool> requestCameraPermission() async {
     final status = await Permission.camera.request();
@@ -373,7 +374,7 @@ class QRScannerService {
 class QRResultDialog extends StatelessWidget {
   final QRScanResult result;
   
-  const QRResultDialog({Key? key, required this.result}) : super(key: key);
+  const QRResultDialog({super.key, required this.result});
 
   @override
   Widget build(BuildContext context) {

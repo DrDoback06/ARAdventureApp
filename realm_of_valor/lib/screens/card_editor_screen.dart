@@ -7,8 +7,8 @@ import '../widgets/card_widget.dart';
 
 class CardEditorScreen extends StatefulWidget {
   final GameCard? editingCard;
-
-  const CardEditorScreen({Key? key, this.editingCard}) : super(key: key);
+  
+  const CardEditorScreen({super.key, this.editingCard});
 
   @override
   State<CardEditorScreen> createState() => _CardEditorScreenState();

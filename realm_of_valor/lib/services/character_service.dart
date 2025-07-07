@@ -16,6 +16,11 @@ class CharacterService {
     _loadCurrentCharacter();
   }
   
+  // Force clear corrupted data - useful for testing
+  Future<void> clearAllData() async {
+    await _clearCorruptedData();
+  }
+  
   // Character Management
   Future<void> createCharacter(GameCharacter character) async {
     _characters.add(character);
@@ -367,8 +372,42 @@ class CharacterService {
   }
   
   Future<void> _saveCharacters() async {
-    final charactersJson = jsonEncode(_characters.map((character) => character.toJson()).toList());
-    await _prefs.setString(_charactersKey, charactersJson);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      
+      // Clean up characters before saving to remove any null values
+      final cleanedCharacters = _characters.map((character) {
+        return character.copyWith(
+          inventory: character.inventory.where((item) => item != null).toList(),
+          stash: character.stash.where((item) => item != null).toList(),
+          skillSlots: character.skillSlots.where((item) => item != null).toList(),
+        );
+      }).toList();
+      
+      final charactersJson = cleanedCharacters.map((c) => c.toJson()).toList();
+      await prefs.setString('characters', jsonEncode(charactersJson));
+      
+      if (_currentCharacter?.id != null) {
+        await prefs.setString('currentCharacterId', _currentCharacter!.id);
+      }
+    } catch (e) {
+      print('Error saving characters: $e');
+      // Clear corrupted data and start fresh
+      await _clearCorruptedData();
+    }
+  }
+  
+  Future<void> _clearCorruptedData() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('characters');
+      await prefs.remove('currentCharacterId');
+      _characters.clear();
+      _currentCharacter = null;
+      print('Cleared corrupted character data');
+    } catch (e) {
+      print('Error clearing corrupted data: $e');
+    }
   }
   
   void _loadCurrentCharacter() {

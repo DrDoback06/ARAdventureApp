@@ -11,21 +11,29 @@ class CharacterProvider with ChangeNotifier {
   
   // Level-up detection
   bool _hasLeveledUp = false;
-  int _previousLevel = 0;
   
   CharacterProvider(this._characterService) {
     _initializeProvider();
   }
   
   void _initializeProvider() {
-    final character = currentCharacter;
-    if (character != null) {
-      _previousLevel = character.level;
+    // Load existing characters from service
+    _loadCharacters();
+  }
+  
+  void _loadCharacters() {
+    // Get current character from service if any
+    if (_characterService.getCurrentCharacter() != null) {
+      _hasLeveledUp = false;
     }
   }
   
+  // Get current character from the service
   GameCharacter? get currentCharacter => _characterService.getCurrentCharacter();
+  
+  // Get all characters from the service
   List<GameCharacter> get allCharacters => _characterService.getAllCharacters();
+  
   List<ActivityEntry> get recentActivity => List.unmodifiable(_recentActivity.reversed.take(10));
   bool get hasLeveledUp => _hasLeveledUp;
   
@@ -54,16 +62,17 @@ class CharacterProvider with ChangeNotifier {
   // Character Management
   Future<void> createCharacter(GameCharacter character) async {
     await _characterService.createCharacter(character);
-    _previousLevel = character.level;
+    // Always set the newly created character as current
+    await _characterService.setCurrentCharacter(character.id);
     _addActivity('Created character ${character.name}', 'person_add');
     notifyListeners();
   }
   
   Future<void> setCurrentCharacter(String id) async {
     await _characterService.setCurrentCharacter(id);
-    final character = currentCharacter;
+    // Get the character from the service
+    final character = _characterService.getCharacter(id);
     if (character != null) {
-      _previousLevel = character.level;
       _addActivity('Switched to ${character.name}', 'swap_horiz');
     }
     notifyListeners();
@@ -200,7 +209,6 @@ class CharacterProvider with ChangeNotifier {
       // Check for level up
       if (newLevel > oldLevel) {
         _hasLeveledUp = true;
-        _previousLevel = newLevel;
         final levelsGained = newLevel - oldLevel;
         _addActivity(
           'LEVEL UP! Reached level $newLevel', 
