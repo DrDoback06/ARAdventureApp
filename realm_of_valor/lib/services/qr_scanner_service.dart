@@ -37,7 +37,7 @@ class QRScannerService {
   factory QRScannerService() => _instance;
   QRScannerService._internal();
 
-  final CardService _cardService = CardService();
+  CardService? _cardService;
 
   Future<bool> requestCameraPermission() async {
     final status = await Permission.camera.request();

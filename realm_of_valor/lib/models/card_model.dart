@@ -13,6 +13,8 @@ enum CardType {
   accessory,
   consumable,
   spell,
+  enemy,
+  action,
 }
 
 enum EquipmentSlot {
@@ -51,6 +53,21 @@ enum CardRarity {
   epic,
   legendary,
   mythic,
+  holographic,
+  firstEdition,
+  limitedEdition,
+}
+
+enum CardSet {
+  core,
+  shadows,
+  elements,
+  beasts,
+  ancients,
+  mystics,
+  champions,
+  promo,
+  physical,
 }
 
 @JsonSerializable()
@@ -97,7 +114,7 @@ class CardEffect {
   CardEffect({
     required this.type,
     required this.value,
-    required this.description,
+    this.description = '',
     this.duration = 0,
   });
 
@@ -113,6 +130,7 @@ class GameCard {
   final String description;
   final CardType type;
   final CardRarity rarity;
+  final CardSet set;
   final EquipmentSlot equipmentSlot;
   final Set<CharacterClass> allowedClasses;
   final List<StatModifier> statModifiers;
@@ -126,6 +144,16 @@ class GameCard {
   final bool isConsumable;
   final bool isTradeable;
   final Map<String, dynamic> customProperties;
+  // Combat stats
+  final int attack;
+  final int defense;
+  final int health;
+  final int mana;
+  final int strength;
+  final int agility;
+  final int intelligence;
+  // Physical card integration
+  final String? physicalCardId;
 
   GameCard({
     String? id,
@@ -133,6 +161,7 @@ class GameCard {
     required this.description,
     required this.type,
     this.rarity = CardRarity.common,
+    this.set = CardSet.core,
     this.equipmentSlot = EquipmentSlot.none,
     Set<CharacterClass>? allowedClasses,
     List<StatModifier>? statModifiers,
@@ -146,6 +175,14 @@ class GameCard {
     this.isConsumable = false,
     this.isTradeable = true,
     Map<String, dynamic>? customProperties,
+    this.attack = 0,
+    this.defense = 0,
+    this.health = 0,
+    this.mana = 0,
+    this.strength = 0,
+    this.agility = 0,
+    this.intelligence = 0,
+    this.physicalCardId,
   })  : id = id ?? const Uuid().v4(),
         allowedClasses = allowedClasses ?? <CharacterClass>{},
         statModifiers = statModifiers ?? <StatModifier>[],
@@ -163,6 +200,7 @@ class GameCard {
     String? description,
     CardType? type,
     CardRarity? rarity,
+    CardSet? set,
     EquipmentSlot? equipmentSlot,
     Set<CharacterClass>? allowedClasses,
     List<StatModifier>? statModifiers,
@@ -176,6 +214,14 @@ class GameCard {
     bool? isConsumable,
     bool? isTradeable,
     Map<String, dynamic>? customProperties,
+    int? attack,
+    int? defense,
+    int? health,
+    int? mana,
+    int? strength,
+    int? agility,
+    int? intelligence,
+    String? physicalCardId,
   }) {
     return GameCard(
       id: id ?? this.id,
@@ -183,6 +229,7 @@ class GameCard {
       description: description ?? this.description,
       type: type ?? this.type,
       rarity: rarity ?? this.rarity,
+      set: set ?? this.set,
       equipmentSlot: equipmentSlot ?? this.equipmentSlot,
       allowedClasses: allowedClasses ?? this.allowedClasses,
       statModifiers: statModifiers ?? this.statModifiers,
@@ -196,6 +243,14 @@ class GameCard {
       isConsumable: isConsumable ?? this.isConsumable,
       isTradeable: isTradeable ?? this.isTradeable,
       customProperties: customProperties ?? this.customProperties,
+      attack: attack ?? this.attack,
+      defense: defense ?? this.defense,
+      health: health ?? this.health,
+      mana: mana ?? this.mana,
+      strength: strength ?? this.strength,
+      agility: agility ?? this.agility,
+      intelligence: intelligence ?? this.intelligence,
+      physicalCardId: physicalCardId ?? this.physicalCardId,
     );
   }
 }

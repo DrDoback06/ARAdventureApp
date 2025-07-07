@@ -11,7 +11,7 @@ class BattleService {
   factory BattleService() => _instance;
   BattleService._internal();
 
-  final CharacterService _characterService = CharacterService();
+  CharacterService? _characterService;
   final Random _random = Random();
 
   // Create a new battle
@@ -392,9 +392,9 @@ class BattleService {
           break;
         case 'mana_restore':
           final manaAmount = int.parse(effect.value);
-          final player = battle.players.firstWhere((p) => p.id == player.id);
-          final updatedPlayer = player.copyWith(
-            currentMana: (player.currentMana + manaAmount).clamp(0, player.maxMana),
+          final currentPlayer = battle.players.firstWhere((p) => p.id == player.id);
+          final updatedPlayer = currentPlayer.copyWith(
+            currentMana: (currentPlayer.currentMana + manaAmount).clamp(0, currentPlayer.maxMana),
           );
           updatedBattle = updatedBattle.copyWith(
             players: updatedBattle.players.map((p) => p.id == player.id ? updatedPlayer : p).toList(),

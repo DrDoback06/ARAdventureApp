@@ -36,7 +36,7 @@ Map<String, dynamic> _$CardConditionToJson(CardCondition instance) =>
 CardEffect _$CardEffectFromJson(Map<String, dynamic> json) => CardEffect(
       type: json['type'] as String,
       value: json['value'] as String,
-      description: json['description'] as String,
+      description: json['description'] as String? ?? '',
       duration: (json['duration'] as num?)?.toInt() ?? 0,
     );
 
@@ -55,6 +55,7 @@ GameCard _$GameCardFromJson(Map<String, dynamic> json) => GameCard(
       type: $enumDecode(_$CardTypeEnumMap, json['type']),
       rarity: $enumDecodeNullable(_$CardRarityEnumMap, json['rarity']) ??
           CardRarity.common,
+      set: $enumDecodeNullable(_$CardSetEnumMap, json['set']) ?? CardSet.core,
       equipmentSlot:
           $enumDecodeNullable(_$EquipmentSlotEnumMap, json['equipmentSlot']) ??
               EquipmentSlot.none,
@@ -78,6 +79,14 @@ GameCard _$GameCardFromJson(Map<String, dynamic> json) => GameCard(
       isConsumable: json['isConsumable'] as bool? ?? false,
       isTradeable: json['isTradeable'] as bool? ?? true,
       customProperties: json['customProperties'] as Map<String, dynamic>?,
+      attack: (json['attack'] as num?)?.toInt() ?? 0,
+      defense: (json['defense'] as num?)?.toInt() ?? 0,
+      health: (json['health'] as num?)?.toInt() ?? 0,
+      mana: (json['mana'] as num?)?.toInt() ?? 0,
+      strength: (json['strength'] as num?)?.toInt() ?? 0,
+      agility: (json['agility'] as num?)?.toInt() ?? 0,
+      intelligence: (json['intelligence'] as num?)?.toInt() ?? 0,
+      physicalCardId: json['physicalCardId'] as String?,
     );
 
 Map<String, dynamic> _$GameCardToJson(GameCard instance) => <String, dynamic>{
@@ -86,6 +95,7 @@ Map<String, dynamic> _$GameCardToJson(GameCard instance) => <String, dynamic>{
       'description': instance.description,
       'type': _$CardTypeEnumMap[instance.type]!,
       'rarity': _$CardRarityEnumMap[instance.rarity]!,
+      'set': _$CardSetEnumMap[instance.set]!,
       'equipmentSlot': _$EquipmentSlotEnumMap[instance.equipmentSlot]!,
       'allowedClasses': instance.allowedClasses
           .map((e) => _$CharacterClassEnumMap[e]!)
@@ -101,6 +111,14 @@ Map<String, dynamic> _$GameCardToJson(GameCard instance) => <String, dynamic>{
       'isConsumable': instance.isConsumable,
       'isTradeable': instance.isTradeable,
       'customProperties': instance.customProperties,
+      'attack': instance.attack,
+      'defense': instance.defense,
+      'health': instance.health,
+      'mana': instance.mana,
+      'strength': instance.strength,
+      'agility': instance.agility,
+      'intelligence': instance.intelligence,
+      'physicalCardId': instance.physicalCardId,
     };
 
 const _$CardTypeEnumMap = {
@@ -113,6 +131,8 @@ const _$CardTypeEnumMap = {
   CardType.accessory: 'accessory',
   CardType.consumable: 'consumable',
   CardType.spell: 'spell',
+  CardType.enemy: 'enemy',
+  CardType.action: 'action',
 };
 
 const _$CardRarityEnumMap = {
@@ -122,6 +142,21 @@ const _$CardRarityEnumMap = {
   CardRarity.epic: 'epic',
   CardRarity.legendary: 'legendary',
   CardRarity.mythic: 'mythic',
+  CardRarity.holographic: 'holographic',
+  CardRarity.firstEdition: 'firstEdition',
+  CardRarity.limitedEdition: 'limitedEdition',
+};
+
+const _$CardSetEnumMap = {
+  CardSet.core: 'core',
+  CardSet.shadows: 'shadows',
+  CardSet.elements: 'elements',
+  CardSet.beasts: 'beasts',
+  CardSet.ancients: 'ancients',
+  CardSet.mystics: 'mystics',
+  CardSet.champions: 'champions',
+  CardSet.promo: 'promo',
+  CardSet.physical: 'physical',
 };
 
 const _$EquipmentSlotEnumMap = {
