@@ -434,9 +434,13 @@ class PhysicalActivityService {
     
     for (final point in healthData) {
       final value = point.value;
-      final numericValue = value is HealthValue ? 
-        (value.numericValue ?? 0.0) : 
-        (value as num).toDouble();
+      double numericValue = 0.0;
+      
+      if (value is num) {
+        numericValue = value.toDouble();
+      } else if (value is String) {
+        numericValue = double.tryParse(value) ?? 0.0;
+      }
         
       final metric = HealthMetrics(
         steps: point.type == HealthDataType.STEPS ? numericValue.toInt() : 0,
