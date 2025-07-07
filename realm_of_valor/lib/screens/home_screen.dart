@@ -6,7 +6,13 @@ import '../providers/character_provider.dart';
 import '../services/card_service.dart';
 import '../constants/theme.dart';
 import '../widgets/inventory_widget.dart';
+import '../widgets/fitness_tracker_widget.dart';
+import '../widgets/quest_progress_overlay.dart';
+import '../services/fitness_tracker_service.dart';
+import '../services/location_verification_service.dart';
+import '../models/adventure_system.dart';
 import 'card_editor_screen.dart';
+import 'adventure_map_screen.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -1225,6 +1231,68 @@ class _HomeScreenState extends State<HomeScreen> {
     return const CardEditorScreen();
   }
 
+  // Get mock active quests for testing
+  List<Quest> _getMockActiveQuests() {
+    return [
+      Quest(
+        title: 'Explore Central Park',
+        description: 'Visit the heart of the city and discover its secrets',
+        type: QuestType.exploration,
+        location: GeoLocation(
+          latitude: 40.7829,
+          longitude: -73.9654,
+        ),
+        radius: 100.0,
+        objectives: [
+          QuestObjective(
+            id: 'park_visit',
+            title: 'Visit Park',
+            description: 'Reach Central Park',
+            type: 'location_visit',
+            requirements: {'targetValue': 1},
+            progress: {'currentValue': 0},
+            isCompleted: false,
+            xpReward: 100,
+          ),
+          QuestObjective(
+            id: 'stay_time',
+            title: 'Stay Duration',
+            description: 'Spend 5 minutes in the park',
+            type: 'location_time',
+            requirements: {'targetValue': 300},
+            progress: {'currentValue': 0},
+            isCompleted: false,
+            xpReward: 150,
+          ),
+        ],
+        xpReward: 250,
+      ),
+      Quest(
+        title: 'Morning Jog Challenge',
+        description: 'Complete a 2km morning run',
+        type: QuestType.exploration,
+        location: GeoLocation(
+          latitude: 40.7831,
+          longitude: -73.9712,
+        ),
+        radius: 50.0,
+        objectives: [
+          QuestObjective(
+            id: 'run_start',
+            title: 'Start Run',
+            description: 'Start your run at the track',
+            type: 'location_visit',
+            requirements: {'targetValue': 1},
+            progress: {'currentValue': 0},
+            isCompleted: false,
+            xpReward: 200,
+          ),
+        ],
+        xpReward: 200,
+      ),
+    ];
+  }
+
   Widget _buildMapTab() {
     return Consumer<CharacterProvider>(
       builder: (context, characterProvider, child) {
@@ -1239,45 +1307,348 @@ class _HomeScreenState extends State<HomeScreen> {
           );
         }
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Location Header
-              _buildLocationHeader(),
-              
-              const SizedBox(height: 16),
-              
-              // Active Quests
-              _buildActiveQuestsSection(character, characterProvider),
-              
-              const SizedBox(height: 16),
-              
-              // Available Adventures
-              _buildAvailableAdventuresSection(character),
-              
-              const SizedBox(height: 16),
-              
-              // Daily Challenges
-              _buildDailyChallengesSection(character, characterProvider),
-              
-              const SizedBox(height: 16),
-              
-              // Special Events
-              _buildSpecialEventsSection(character),
-              
-              const SizedBox(height: 16),
-              
-              // QR Code Adventure
-              _buildQRAdventureSection(),
-            ],
-          ),
+        return Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // NEW: Adventure Mode Quick Access
+                  _buildAdventureModeSection(),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Real-time Fitness Tracker Integration
+                  _buildFitnessTrackerSection(),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // EXISTING: Location Header
+                  _buildLocationHeader(),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // EXISTING: Active Quests
+                  _buildActiveQuestsSection(character, characterProvider),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // EXISTING: Available Adventures
+                  _buildAvailableAdventuresSection(character),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // EXISTING: Daily Challenges
+                  _buildDailyChallengesSection(character, characterProvider),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // EXISTING: Special Events
+                  _buildSpecialEventsSection(character),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // EXISTING: QR Code Adventure
+                  _buildQRAdventureSection(),
+                  
+                  // Extra space for quest overlay
+                  const SizedBox(height: 100),
+                ],
+              ),
+            ),
+            
+            // Quest Progress Overlay
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: QuestProgressOverlay(
+                activeQuests: _getMockActiveQuests(),
+                showCompact: true,
+              ),
+            ),
+          ],
         );
       },
     );
   }
   
+  Widget _buildAdventureModeSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: RealmOfValorTheme.accentGold.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.explore,
+                    color: RealmOfValorTheme.accentGold,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Adventure Mode',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: RealmOfValorTheme.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Real-world exploration with AR encounters',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: RealmOfValorTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _launchFullAdventureMode(),
+                  icon: const Icon(
+                    Icons.fullscreen,
+                    color: RealmOfValorTheme.accentGold,
+                  ),
+                  tooltip: 'Open Full Adventure Map',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Quick stats row
+            Row(
+              children: [
+                Expanded(
+                  child: _buildAdventureStatCard(
+                    'Weather',
+                    'Sunny ☀️',
+                    Icons.wb_sunny,
+                    Colors.orange,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildAdventureStatCard(
+                    'Trails',
+                    '5 Found',
+                    Icons.hiking,
+                    Colors.green,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildAdventureStatCard(
+                    'Active',
+                    '2 Quests',
+                    Icons.assignment,
+                    Colors.green,
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 16),
+            
+            // Adventure actions
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _launchFullAdventureMode(),
+                    icon: const Icon(Icons.map, size: 16),
+                    label: const Text('Full Map'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: RealmOfValorTheme.accentGold,
+                      foregroundColor: RealmOfValorTheme.primaryDark,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _startQuickAdventure(),
+                    icon: const Icon(Icons.play_arrow, size: 16),
+                    label: const Text('Quick Start'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: RealmOfValorTheme.primaryLight,
+                      foregroundColor: RealmOfValorTheme.accentGold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAdventureStatCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: color.withOpacity(0.3),
+          width: 1,
+        ),
+      ),
+      child: Column(
+        children: [
+          Icon(icon, color: color, size: 20),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 10,
+              color: RealmOfValorTheme.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFitnessTrackerSection() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.fitness_center,
+                    color: Colors.red,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Fitness Tracker',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: RealmOfValorTheme.textPrimary,
+                        ),
+                      ),
+                      Text(
+                        'Real-time biometric stat boosts',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: RealmOfValorTheme.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => _showFitnessTrackerDialog(),
+                  icon: const Icon(
+                    Icons.open_in_full,
+                    color: Colors.red,
+                  ),
+                  tooltip: 'Open Fitness Dashboard',
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Compact fitness tracker view
+            const FitnessTrackerWidget(
+              showCompact: true,
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Fitness actions
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _showFitnessTrackerDialog(),
+                    icon: const Icon(Icons.dashboard, size: 16),
+                    label: const Text('Full Dashboard'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () => _syncFitnessData(),
+                    icon: const Icon(Icons.sync, size: 16),
+                    label: const Text('Sync Data'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: RealmOfValorTheme.primaryLight,
+                      foregroundColor: Colors.red,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _launchFullAdventureMode() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AdventureMapScreen(),
+      ),
+    );
+  }
+
+  void _startQuickAdventure() {
+    // TODO: Implement quick adventure start
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Quick Adventure feature coming soon!'),
+        backgroundColor: RealmOfValorTheme.accentGold,
+      ),
+    );
+  }
+
   Widget _buildLocationHeader() {
     return Card(
       child: Padding(
@@ -3654,5 +4025,87 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   
+  void _showFitnessTrackerDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => const FitnessTrackerDialog(),
+    );
+  }
+  
+  void _syncFitnessData() async {
+    try {
+      final fitnessService = Provider.of<FitnessTrackerService>(context, listen: false);
+      
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: 16),
+              Text('Syncing fitness data...'),
+            ],
+          ),
+          backgroundColor: Colors.blue,
+        ),
+      );
+      
+      // Initialize fitness tracker if not already done
+      final initialized = await fitnessService.initialize();
+      
+      if (initialized) {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 16),
+                Text('Fitness data synced successfully!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            action: SnackBarAction(
+              label: 'View',
+              textColor: Colors.white,
+              onPressed: _showFitnessTrackerDialog,
+            ),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).hideCurrentSnackBar();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.error, color: Colors.white),
+                SizedBox(width: 16),
+                Text('Failed to sync fitness data. Check permissions.'),
+              ],
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error, color: Colors.white),
+              const SizedBox(width: 16),
+              Expanded(child: Text('Sync error: ${e.toString()}')),
+            ],
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
 }

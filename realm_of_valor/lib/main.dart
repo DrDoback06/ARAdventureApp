@@ -6,6 +6,12 @@ import 'constants/theme.dart';
 import 'providers/character_provider.dart';
 import 'services/character_service.dart';
 import 'services/card_service.dart';
+import 'services/enhanced_location_service.dart';
+import 'services/weather_service.dart';
+import 'services/strava_service.dart';
+import 'services/physical_activity_service.dart';
+import 'services/fitness_tracker_service.dart';
+import 'services/location_verification_service.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -77,6 +83,68 @@ class RealmOfValorApp extends StatelessWidget {
               return CardService(prefs);
             } catch (e) {
               debugPrint('CardService initialization error: $e');
+              rethrow;
+            }
+          },
+        ),
+        
+        // Adventure Mode Services
+        Provider<EnhancedLocationService>(
+          create: (context) {
+            try {
+              return EnhancedLocationService();
+            } catch (e) {
+              debugPrint('EnhancedLocationService initialization error: $e');
+              rethrow;
+            }
+          },
+        ),
+        Provider<WeatherService>(
+          create: (context) {
+            try {
+              return WeatherService();
+            } catch (e) {
+              debugPrint('WeatherService initialization error: $e');
+              rethrow;
+            }
+          },
+        ),
+        Provider<StravaService>(
+          create: (context) {
+            try {
+              return StravaService();
+            } catch (e) {
+              debugPrint('StravaService initialization error: $e');
+              rethrow;
+            }
+          },
+        ),
+        Provider<PhysicalActivityService>(
+          create: (context) {
+            try {
+              return PhysicalActivityService();
+            } catch (e) {
+              debugPrint('PhysicalActivityService initialization error: $e');
+              rethrow;
+            }
+          },
+        ),
+        Provider<FitnessTrackerService>(
+          create: (context) {
+            try {
+              return FitnessTrackerService();
+            } catch (e) {
+              debugPrint('FitnessTrackerService initialization error: $e');
+              rethrow;
+            }
+          },
+        ),
+        Provider<LocationVerificationService>(
+          create: (context) {
+            try {
+              return LocationVerificationService();
+            } catch (e) {
+              debugPrint('LocationVerificationService initialization error: $e');
               rethrow;
             }
           },
