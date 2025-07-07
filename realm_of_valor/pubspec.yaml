@@ -101,6 +101,27 @@ dependencies:
   
   # Enhanced Material Design
   flutter_material_color_picker: ^1.2.0
+  
+  # Adventure Mode & Location Features
+  background_location: ^0.13.0
+  geocoding: ^3.0.0
+  google_polyline_algorithm: ^3.1.0
+  
+  # Weather & Environment APIs
+  weather: ^3.1.1
+  
+  # OAuth and API integrations (for Strava)
+  oauth2: ^2.0.2
+  dio: ^5.4.3+1
+  
+  # Enhanced location services
+  location: ^6.0.2
+  
+  # Map clustering for POIs
+  google_maps_cluster_manager: ^3.0.0+1
+  
+  # GPX file support for trails
+  gpx: ^2.2.1
 
 dev_dependencies:
   flutter_test:
