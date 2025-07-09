@@ -13,6 +13,8 @@ import '../services/location_verification_service.dart';
 import '../models/adventure_system.dart';
 import 'card_editor_screen.dart';
 import 'adventure_map_screen.dart';
+import 'battle_screen.dart';
+import '../utils/battle_test_utils.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -305,8 +307,10 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              alignment: WrapAlignment.spaceEvenly,
               children: [
                 _buildQuickActionButton(
                   'Add Item',
@@ -332,6 +336,11 @@ class _HomeScreenState extends State<HomeScreen> {
                   'Shop',
                   Icons.store,
                   () => _visitShop(characterProvider),
+                ),
+                _buildQuickActionButton(
+                  'Battle Test',
+                  Icons.flash_on,
+                  () => _startTestBattle(),
                 ),
               ],
             ),
@@ -544,6 +553,70 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+  }
+
+  void _startTestBattle() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Battle Test'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.flash_on,
+              size: 64,
+              color: RealmOfValorTheme.accentGold,
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Choose a battle scenario to test:',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchBattle(BattleTestUtils.createQuickTestBattle());
+            },
+            child: const Text('1v1 Test'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchBattle(BattleTestUtils.createMultiPlayerTestBattle());
+            },
+            child: const Text('4-Player Test'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchBattle(BattleTestUtils.createBossTestBattle());
+            },
+            child: const Text('Boss Battle'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _launchBattle(Battle battle) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BattleScreen(battle: battle),
+      ),
+    );
   }
 
   Widget _buildStatColumn(String label, dynamic value) {
