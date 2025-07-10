@@ -1180,9 +1180,27 @@ class _BattleScreenState extends State<BattleScreen>
   }
 
   void _performDragAttack(BattleController controller, String targetId) {
-    // Set the target and perform attack
+    // ENHANCED: Direct drag attack without requiring target selection first
+    final currentPlayer = controller.getCurrentPlayer();
+    if (currentPlayer == null) return;
+    
+    // Automatically set target and perform attack
     controller.selectTarget(targetId);
+    
+    // Trigger spectacular attack animation with particles!
+    controller.triggerTestParticleEffect(ParticleType.fire);
+    
+    // Perform the attack
     controller.performAttack();
+    
+    // Show attack feedback
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('⚔️ ${currentPlayer.name} attacks!'),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 1),
+      ),
+    );
   }
 
   void _showBattleMenu(BuildContext context, BattleController controller) {

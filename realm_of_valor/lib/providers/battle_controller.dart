@@ -364,6 +364,29 @@ class BattleController extends ChangeNotifier {
   }
 
   void _applyCardEffectToTarget(ActionCard card, BattlePlayer caster, BattlePlayer target) {
+    // Handle cards with no specific effects but have damage type
+    if (card.effect.isEmpty && card.type == ActionCardType.damage) {
+      // Default damage based on cost
+      final damageAmount = math.max(1, card.cost * 2);
+      final newHealth = math.max(0, target.currentHealth - damageAmount);
+      final updatedTarget = target.copyWith(currentHealth: newHealth);
+      _updatePlayer(updatedTarget);
+      _addBattleLog('${caster.name} casts ${card.name} dealing $damageAmount damage to ${target.name}!', caster.name);
+      
+      if (newHealth <= 0) {
+        _addBattleLog('${target.name} has been defeated!', 'System');
+        _checkBattleEnd();
+      }
+      return;
+    }
+    
+    // Handle cards with no specific effects but have heal type
+    if (card.effect.isEmpty && card.type == ActionCardType.heal) {
+      final healAmount = math.max(1, card.cost * 3);
+      _healPlayer(target.id, healAmount);
+      return;
+    }
+    
     final effects = card.effect.split(',');
     
     for (final effect in effects) {
@@ -375,17 +398,27 @@ class BattleController extends ChangeNotifier {
         case 'damage_bonus':
           final bonus = int.tryParse(effectValue) ?? 0;
           _addBattleLog('${target.name} gains +$bonus attack damage!', caster.name);
-          // TODO: Apply damage bonus status effect
+          // Apply temporary damage bonus
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['damage_bonus'] = 3; // Lasts 3 turns
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
           break;
           
         case 'double_damage':
           _addBattleLog('${target.name}\'s next attack will deal double damage!', caster.name);
-          // TODO: Apply double damage status effect
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['double_damage'] = 1; // Next attack only
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
           break;
           
         case 'half_damage':
           _addBattleLog('${target.name}\'s next attack will deal half damage!', caster.name);
-          // TODO: Apply damage reduction status effect
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['weakened'] = 2; // Lasts 2 turns
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
           break;
           
         case 'skip_turn':
@@ -421,7 +454,32 @@ class BattleController extends ChangeNotifier {
           
         case 'gain_1_extra_attack':
           _addBattleLog('${target.name} gains an extra attack this turn!', caster.name);
-          // TODO: Apply extra attack status effect
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['extra_attack'] = 1; // This turn only
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
+          break;
+          
+        case 'damage':
+          final damageAmount = int.tryParse(effectValue) ?? 0;
+          if (damageAmount > 0) {
+            _applyDamageWithEffects(target.id, damageAmount, effectType: ParticleType.fire);
+          }
+          break;
+          
+        case 'direct_damage':
+          final damageAmount = int.tryParse(effectValue) ?? 0;
+          if (damageAmount > 0) {
+            final newHealth = math.max(0, target.currentHealth - damageAmount);
+            final updatedTarget = target.copyWith(currentHealth: newHealth);
+            _updatePlayer(updatedTarget);
+            _addBattleLog('${caster.name}\'s spell deals $damageAmount damage to ${target.name}! (${target.currentHealth} → $newHealth HP)', caster.name);
+            
+            if (newHealth <= 0) {
+              _addBattleLog('${target.name} has been defeated!', 'System');
+              _checkBattleEnd();
+            }
+          }
           break;
       }
     }
@@ -505,17 +563,18 @@ class BattleController extends ChangeNotifier {
     _addBattleLog('${player.name} discards ${cardToDiscard.name}', player.name);
   }
 
-  // Attack System with REBALANCED COSTS
+  // Attack System with REASONABLE COSTS
   bool canAttack() {
-    if (_currentPhase != BattlePhase.attackPhase) return false;
+    // FIXED: Allow attacks in both play and attack phases
+    if (_currentPhase != BattlePhase.playPhase && _currentPhase != BattlePhase.attackPhase) return false;
     if (_attackUsed) return false;
     if (_selectedTargetId == null) return false;
     
     final currentPlayer = getCurrentPlayer();
     if (currentPlayer == null) return false;
     
-    // NEW: Attacks now cost significant mana (70-80% of max mana)
-    final attackCost = (currentPlayer.maxMana * 0.75).round();
+    // FIXED: Reasonable attack cost (30% of max mana instead of 75%)
+    final attackCost = (currentPlayer.maxMana * 0.3).round();
     if (currentPlayer.currentMana < attackCost) return false;
     
     final target = getPlayerById(_selectedTargetId!);
@@ -530,8 +589,8 @@ class BattleController extends ChangeNotifier {
     
     if (attacker == null || target == null) return;
     
-    // Calculate attack cost (75% of max mana)
-    final attackCost = (attacker.maxMana * 0.75).round();
+    // Calculate attack cost (30% of max mana)
+    final attackCost = (attacker.maxMana * 0.3).round();
     
     // Deduct mana for attack
     final updatedAttacker = attacker.copyWith(
@@ -926,11 +985,11 @@ class BattleController extends ChangeNotifier {
 
   /// Apply status effects from spells and show banner
   void _applyStatusEffectFromSpell(ActionCard spell, BattlePlayer target) {
-    final statusEffect = StatusEffectManager.getEffectForSpell(spell.name);
+    final statusEffect = _getStatusEffectForSpell(spell.name);
     
     // Add to player's status effects
     final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
-    updatedStatusEffects[statusEffect.name.toLowerCase()] = statusEffect.duration;
+    updatedStatusEffects[statusEffect.type.name.toLowerCase()] = statusEffect.duration;
     
     final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
     _updatePlayer(updatedTarget);
@@ -938,7 +997,34 @@ class BattleController extends ChangeNotifier {
     // Show status effect banner
     _showStatusEffectBanner(statusEffect);
     
-    _addBattleLog('⚡ ${target.name} is affected by ${statusEffect.name}!', 'System');
+    _addBattleLog('⚡ ${target.name} is affected by ${statusEffect.type.name}!', 'System');
+  }
+  
+  /// Get status effect for spell name
+  StatusEffect _getStatusEffectForSpell(String spellName) {
+    final name = spellName.toLowerCase();
+    
+    if (name.contains('fire') || name.contains('burn') || name.contains('flame')) {
+      return StatusEffect.burning();
+    } else if (name.contains('ice') || name.contains('frost') || name.contains('freeze')) {
+      return StatusEffect.frozen();
+    } else if (name.contains('lightning') || name.contains('shock') || name.contains('thunder')) {
+      return StatusEffect.shocked();
+    } else if (name.contains('heal') || name.contains('regenerate') || name.contains('cure')) {
+      return StatusEffect.regenerating();
+    } else if (name.contains('shield') || name.contains('protect') || name.contains('barrier')) {
+      return StatusEffect.shielded();
+    } else if (name.contains('bless') || name.contains('divine') || name.contains('holy')) {
+      return StatusEffect.blessed();
+    } else if (name.contains('curse') || name.contains('weaken') || name.contains('debuff')) {
+      return StatusEffect.weakened();
+    } else if (name.contains('silence') || name.contains('mute') || name.contains('quiet')) {
+      return StatusEffect.silenced();
+    } else if (name.contains('strength') || name.contains('power') || name.contains('might')) {
+      return StatusEffect.strengthened();
+    } else {
+      return StatusEffect.blessed(); // Default effect
+    }
   }
 
   /// Show dramatic status effect banner
