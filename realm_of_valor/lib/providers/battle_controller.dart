@@ -42,6 +42,14 @@ class BattleController extends ChangeNotifier {
   // Status Effect System
   StatusEffect? _currentStatusBanner;
   bool _showStatusBanner = false;
+  
+  // Drag Arrow System
+  Offset? _dragStartPosition;
+  Offset? _dragCurrentPosition;
+  ActionCard? _draggedCard;
+  String? _draggedAction;
+  String? _hoveredTargetId;
+  bool _isDragging = false;
 
   BattleController(this._battle) {
     _initializeBattle();
@@ -66,6 +74,14 @@ class BattleController extends ChangeNotifier {
   bool get showSpellAnimation => _showSpellAnimation;
   StatusEffect? get currentStatusBanner => _currentStatusBanner;
   bool get showStatusBanner => _showStatusBanner;
+  
+  // Drag Arrow Getters
+  Offset? get dragStartPosition => _dragStartPosition;
+  Offset? get dragCurrentPosition => _dragCurrentPosition;
+  ActionCard? get draggedCard => _draggedCard;
+  String? get draggedAction => _draggedAction;
+  String? get hoveredTargetId => _hoveredTargetId;
+  bool get isDragging => _isDragging;
 
   void _initializeBattle() {
     if (_battle.status == BattleStatus.waiting) {
@@ -1046,6 +1062,94 @@ class BattleController extends ChangeNotifier {
   void triggerTestParticleEffect(ParticleType type) {
     // This could be used for testing or special events
     notifyListeners();
+  }
+  
+  // Drag Arrow Management
+  /// Start dragging a card
+  void startCardDrag(ActionCard card, Offset startPosition) {
+    _draggedCard = card;
+    _draggedAction = null;
+    _dragStartPosition = startPosition;
+    _dragCurrentPosition = startPosition;
+    _isDragging = true;
+    notifyListeners();
+  }
+  
+  /// Start dragging an attack action
+  void startAttackDrag(Offset startPosition) {
+    _draggedCard = null;
+    _draggedAction = 'ATTACK';
+    _dragStartPosition = startPosition;
+    _dragCurrentPosition = startPosition;
+    _isDragging = true;
+    notifyListeners();
+  }
+  
+  /// Update drag position
+  void updateDragPosition(Offset currentPosition) {
+    _dragCurrentPosition = currentPosition;
+    notifyListeners();
+  }
+  
+  /// Set hovered target during drag
+  void setHoveredTarget(String? targetId) {
+    if (_hoveredTargetId != targetId) {
+      _hoveredTargetId = targetId;
+      notifyListeners();
+    }
+  }
+  
+  /// End drag operation
+  void endDrag() {
+    _draggedCard = null;
+    _draggedAction = null;
+    _dragStartPosition = null;
+    _dragCurrentPosition = null;
+    _hoveredTargetId = null;
+    _isDragging = false;
+    notifyListeners();
+  }
+  
+  /// Check if a target is valid for the current drag operation
+  bool isValidDragTarget(String targetId) {
+    if (!_isDragging) return false;
+    
+    final target = getPlayerById(targetId);
+    if (target == null || target.currentHealth <= 0) return false;
+    
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    
+    // Attack targeting rules
+    if (_draggedAction == 'ATTACK') {
+      // Can attack enemies
+      return !isFriendly(targetId);
+    }
+    
+    // Card targeting rules
+    if (_draggedCard != null) {
+      switch (_draggedCard!.type) {
+        case ActionCardType.heal:
+        case ActionCardType.buff:
+          // Healing and buffs can target allies (including self)
+          return true; // Allow targeting anyone for strategic play
+          
+        case ActionCardType.damage:
+        case ActionCardType.debuff:
+          // Damage and debuffs can target enemies
+          return !isFriendly(targetId);
+          
+        case ActionCardType.special:
+        case ActionCardType.counter:
+          // Special cards can target anyone
+          return true;
+          
+        default:
+          return true;
+      }
+    }
+    
+    return false;
   }
 
   /// Apply healing with visual effects

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/battle_model.dart';
 import 'status_effect_overlay.dart';
+import 'target_highlight_widget.dart';
 import '../effects/particle_system.dart';
 import 'dart:math' as math;
 
@@ -11,6 +12,14 @@ class PlayerPortraitWidget extends StatelessWidget {
   final VoidCallback? onTap;
   final Function(ActionCard, String)? onCardDropped;
   final Function(String)? onAttackDropped;
+  
+  // Drag Arrow Enhancement Properties
+  final bool isValidDragTarget;
+  final bool isHovered;
+  final ActionCard? draggedCard;
+  final String? draggedAction;
+  final Function(String)? onDragEnter;
+  final Function(String)? onDragLeave;
 
   const PlayerPortraitWidget({
     Key? key,
@@ -20,6 +29,12 @@ class PlayerPortraitWidget extends StatelessWidget {
     this.onTap,
     this.onCardDropped,
     this.onAttackDropped,
+    this.isValidDragTarget = false,
+    this.isHovered = false,
+    this.draggedCard,
+    this.draggedAction,
+    this.onDragEnter,
+    this.onDragLeave,
   }) : super(key: key);
 
   @override
@@ -27,26 +42,52 @@ class PlayerPortraitWidget extends StatelessWidget {
     final isDead = player.currentHealth <= 0;
     final statusEffects = _generateStatusEffectsFromPlayer();
     
-    return StatusEffectOverlay(
-      statusEffects: statusEffects,
-      size: 120.0,
-      child: DragTarget<String>(
-        onAccept: (attack) {
-          if (attack == 'ATTACK' && onAttackDropped != null) {
-            onAttackDropped!(player.id);
-          }
-        },
-        onWillAccept: (attack) => attack == 'ATTACK' && !isDead,
-        builder: (context, attackCandidates, attackRejected) {
-          return DragTarget<ActionCard>(
-            onAccept: (card) {
-              if (onCardDropped != null) {
-                onCardDropped!(card, player.id);
-              }
-            },
-            onWillAccept: (card) => card != null && !isDead,
-            builder: (context, cardCandidates, cardRejected) {
-              final isHighlighted = cardCandidates.isNotEmpty || attackCandidates.isNotEmpty;
+    return TargetHighlightWidget(
+      isValidTarget: isValidDragTarget,
+      isHovered: isHovered,
+      draggedCard: draggedCard,
+      draggedAction: draggedAction,
+      playerId: player.id,
+      child: StatusEffectOverlay(
+        statusEffects: statusEffects,
+        size: 120.0,
+        child: DragTarget<String>(
+          onAccept: (attack) {
+            if (attack == 'ATTACK' && onAttackDropped != null) {
+              onAttackDropped!(player.id);
+            }
+          },
+          onWillAccept: (attack) => attack == 'ATTACK' && !isDead,
+          onMove: (details) {
+            if (onDragEnter != null && !isHovered) {
+              onDragEnter!(player.id);
+            }
+          },
+          onLeave: (data) {
+            if (onDragLeave != null) {
+              onDragLeave!(player.id);
+            }
+          },
+          builder: (context, attackCandidates, attackRejected) {
+            return DragTarget<ActionCard>(
+              onAccept: (card) {
+                if (onCardDropped != null) {
+                  onCardDropped!(card, player.id);
+                }
+              },
+              onWillAccept: (card) => card != null && !isDead,
+              onMove: (details) {
+                if (onDragEnter != null && !isHovered) {
+                  onDragEnter!(player.id);
+                }
+              },
+              onLeave: (data) {
+                if (onDragLeave != null) {
+                  onDragLeave!(player.id);
+                }
+              },
+              builder: (context, cardCandidates, cardRejected) {
+                final isHighlighted = cardCandidates.isNotEmpty || attackCandidates.isNotEmpty || isHovered;
         
         return GestureDetector(
           onTap: onTap,
@@ -269,6 +310,8 @@ class PlayerPortraitWidget extends StatelessWidget {
             },
           );
         },
+      ),
+        ),
       ),
     );
   }

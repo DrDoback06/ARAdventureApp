@@ -9,6 +9,7 @@ import '../widgets/battle_log_widget.dart';
 import '../widgets/spell_counter_widget.dart';
 import '../widgets/spell_animation_widget.dart';
 import '../widgets/status_effect_overlay.dart';
+import '../widgets/drag_arrow_widget.dart';
 import '../effects/particle_system.dart';
 
 class BattleScreen extends StatefulWidget {
@@ -178,12 +179,38 @@ class _BattleScreenState extends State<BattleScreen>
                     ),
                   );
                 }).toList(),
+                
+                // EPIC DRAG ARROW SYSTEM! 🏹⚡
+                if (battleController.isDragging)
+                  IgnorePointer(
+                    child: DragArrowWidget(
+                      startPosition: battleController.dragStartPosition,
+                      currentPosition: battleController.dragCurrentPosition,
+                      draggedCard: battleController.draggedCard,
+                      draggedAction: battleController.draggedAction,
+                      hoveredTargetId: battleController.hoveredTargetId,
+                      isValidTarget: battleController.hoveredTargetId != null &&
+                          battleController.isValidDragTarget(battleController.hoveredTargetId!),
+                    ),
+                  ),
               ],
             );
           },
         ),
       ),
     );
+  }
+
+  /// Generate drag properties for PlayerPortraitWidget
+  Map<String, dynamic> _getDragPropertiesForPlayer(BattleController controller, String playerId) {
+    return {
+      'isValidDragTarget': controller.isValidDragTarget(playerId),
+      'isHovered': controller.hoveredTargetId == playerId,
+      'draggedCard': controller.draggedCard,
+      'draggedAction': controller.draggedAction,
+      'onDragEnter': (String targetId) => controller.setHoveredTarget(targetId),
+      'onDragLeave': (String targetId) => controller.setHoveredTarget(null),
+    };
   }
 
   /// Convert player status effects to enhanced status effects for particle system
@@ -383,6 +410,12 @@ class _BattleScreenState extends State<BattleScreen>
                       onTap: () => controller.selectTarget(players[1].id),
                       onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                       onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                      isValidDragTarget: controller.isValidDragTarget(players[1].id),
+                      isHovered: controller.hoveredTargetId == players[1].id,
+                      draggedCard: controller.draggedCard,
+                      draggedAction: controller.draggedAction,
+                      onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                      onDragLeave: (targetId) => controller.setHoveredTarget(null),
                     ),
                   ),
               ],
@@ -411,6 +444,12 @@ class _BattleScreenState extends State<BattleScreen>
                     onTap: () => controller.selectTarget(players[0].id),
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    isValidDragTarget: controller.isValidDragTarget(players[0].id),
+                    isHovered: controller.hoveredTargetId == players[0].id,
+                    draggedCard: controller.draggedCard,
+                    draggedAction: controller.draggedAction,
+                    onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                    onDragLeave: (targetId) => controller.setHoveredTarget(null),
                   ),
                 ),
               ],
@@ -430,25 +469,37 @@ class _BattleScreenState extends State<BattleScreen>
             children: [
               if (players.length > 1)
                 Expanded(
-                                                       child: PlayerPortraitWidget(
+                  child: PlayerPortraitWidget(
                     player: players[1],
                     isActive: controller.battle.currentPlayerId == players[1].id,
                     isOpponent: true,
                     onTap: () => controller.selectTarget(players[1].id),
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    isValidDragTarget: controller.isValidDragTarget(players[1].id),
+                    isHovered: controller.hoveredTargetId == players[1].id,
+                    draggedCard: controller.draggedCard,
+                    draggedAction: controller.draggedAction,
+                    onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                    onDragLeave: (targetId) => controller.setHoveredTarget(null),
                   ),
                 ),
               if (players.length > 2)
                 Expanded(
-                                                           child: PlayerPortraitWidget(
-                      player: players[2],
-                      isActive: controller.battle.currentPlayerId == players[2].id,
-                      isOpponent: true,
-                      onTap: () => controller.selectTarget(players[2].id),
-                      onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
-                      onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    ),
+                  child: PlayerPortraitWidget(
+                    player: players[2],
+                    isActive: controller.battle.currentPlayerId == players[2].id,
+                    isOpponent: true,
+                    onTap: () => controller.selectTarget(players[2].id),
+                    onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                    onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    isValidDragTarget: controller.isValidDragTarget(players[2].id),
+                    isHovered: controller.hoveredTargetId == players[2].id,
+                    draggedCard: controller.draggedCard,
+                    draggedAction: controller.draggedAction,
+                    onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                    onDragLeave: (targetId) => controller.setHoveredTarget(null),
+                  ),
                 ),
             ],
           ),
@@ -789,53 +840,64 @@ class _BattleScreenState extends State<BattleScreen>
             child: Row(
               children: [
                 controller.canAttack()
-                    ? Draggable<String>(
-                        data: 'ATTACK',
-                        feedback: Material(
-                          color: Colors.transparent,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFe94560),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.3),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 5),
-                                ),
-                              ],
-                            ),
-                            child: const Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.flash_on, color: Colors.white, size: 20),
-                                SizedBox(width: 4),
-                                Text(
-                                  'ATTACK',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
+                    ? Listener(
+                        onPointerDown: (event) {
+                          controller.startAttackDrag(event.position);
+                        },
+                        onPointerMove: (event) {
+                          controller.updateDragPosition(event.position);
+                        },
+                        onPointerUp: (event) {
+                          controller.endDrag();
+                        },
+                        child: Draggable<String>(
+                          data: 'ATTACK',
+                          feedback: Material(
+                            color: Colors.transparent,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFe94560),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.3),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 5),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
+                              child: const Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(Icons.flash_on, color: Colors.white, size: 20),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    'ATTACK',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        childWhenDragging: Opacity(
-                          opacity: 0.5,
+                          childWhenDragging: Opacity(
+                            opacity: 0.5,
+                            child: _buildActionButton(
+                              'Attack',
+                              Icons.flash_on,
+                              false,
+                              () {},
+                            ),
+                          ),
                           child: _buildActionButton(
                             'Attack',
                             Icons.flash_on,
-                            false,
-                            () {},
+                            controller.canAttack(),
+                            () => controller.performAttack(),
                           ),
-                        ),
-                        child: _buildActionButton(
-                          'Attack',
-                          Icons.flash_on,
-                          controller.canAttack(),
-                          () => controller.performAttack(),
                         ),
                       )
                     : _buildActionButton(
