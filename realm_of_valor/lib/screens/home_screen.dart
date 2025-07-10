@@ -13,8 +13,9 @@ import '../services/location_verification_service.dart';
 import '../models/adventure_system.dart';
 import 'card_editor_screen.dart';
 import 'adventure_map_screen.dart';
-import 'battle_screen.dart';
+import 'battle_screen_simple.dart';
 import '../utils/battle_test_utils.dart';
+import '../models/battle_model.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -614,7 +615,7 @@ class _HomeScreenState extends State<HomeScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => BattleScreen(battle: battle),
+                        builder: (context) => BattleScreenSimple(initialBattle: battle),
       ),
     );
   }

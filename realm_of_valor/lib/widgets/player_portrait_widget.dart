@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/battle_model.dart';
+import '../models/character_model.dart';
 import 'status_effect_overlay.dart';
 import 'target_highlight_widget.dart';
 import '../effects/particle_system.dart';
@@ -213,7 +214,7 @@ class PlayerPortraitWidget extends StatelessWidget {
                       _buildStatDisplay(
                         'ATK',
                         player.character.attack,
-                        Icons.sword,
+                        Icons.sports_martial_arts,
                         isDead ? Colors.grey : Colors.orange,
                         isDead,
                       ),
@@ -310,8 +311,6 @@ class PlayerPortraitWidget extends StatelessWidget {
             },
           );
         },
-      ),
-        ),
       ),
     );
   }

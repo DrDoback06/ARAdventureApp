@@ -380,7 +380,7 @@ class _SpellCounterWidgetState extends State<SpellCounterWidget>
         
         const SizedBox(height: 12),
         
-        Container(
+        SizedBox(
           height: 140,
           child: ListView.builder(
             scrollDirection: Axis.horizontal,

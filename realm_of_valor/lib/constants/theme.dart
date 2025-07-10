@@ -231,7 +231,7 @@ class RealmOfValorTheme {
       ),
       
       // Dialog Theme
-      dialogTheme: const DialogTheme(
+      dialogTheme: const DialogThemeData(
         backgroundColor: surfaceMedium,
         elevation: 24,
         shadowColor: shadowBlack,
