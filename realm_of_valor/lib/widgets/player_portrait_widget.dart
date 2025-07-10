@@ -6,6 +6,8 @@ class PlayerPortraitWidget extends StatelessWidget {
   final bool isActive;
   final bool isOpponent;
   final VoidCallback? onTap;
+  final Function(ActionCard, String)? onCardDropped;
+  final Function(String)? onAttackDropped;
 
   const PlayerPortraitWidget({
     Key? key,
@@ -13,42 +15,68 @@ class PlayerPortraitWidget extends StatelessWidget {
     required this.isActive,
     required this.isOpponent,
     this.onTap,
+    this.onCardDropped,
+    this.onAttackDropped,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final isDead = player.currentHealth <= 0;
     
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
+    return DragTarget<String>(
+      onAccept: (attack) {
+        if (attack == 'ATTACK' && onAttackDropped != null) {
+          onAttackDropped!(player.id);
+        }
+      },
+      onWillAccept: (attack) => attack == 'ATTACK' && !isDead,
+      builder: (context, attackCandidates, attackRejected) {
+        return DragTarget<ActionCard>(
+          onAccept: (card) {
+            if (onCardDropped != null) {
+              onCardDropped!(card, player.id);
+            }
+          },
+          onWillAccept: (card) => card != null && !isDead,
+          builder: (context, cardCandidates, cardRejected) {
+            final isHighlighted = cardCandidates.isNotEmpty || attackCandidates.isNotEmpty;
+        
+        return GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         margin: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: isDead 
-              ? Colors.grey.withOpacity(0.3)
-              : (isActive 
-                  ? const Color(0xFFe94560).withOpacity(0.8)
-                  : const Color(0xFF16213e)),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
+                  decoration: BoxDecoration(
             color: isDead 
-                ? Colors.grey
-                : (isActive 
-                    ? Colors.white 
-                    : const Color(0xFFe94560)),
-            width: isActive ? 3 : 2,
+                ? Colors.grey.withOpacity(0.3)
+                : (isHighlighted
+                    ? Colors.yellow.withOpacity(0.8)
+                    : (isActive 
+                        ? const Color(0xFFe94560).withOpacity(0.8)
+                        : const Color(0xFF16213e))),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDead 
+                  ? Colors.grey
+                  : (isHighlighted
+                      ? Colors.yellow
+                      : (isActive 
+                          ? Colors.white 
+                          : const Color(0xFFe94560))),
+              width: isHighlighted ? 4 : (isActive ? 3 : 2),
+            ),
+            boxShadow: (isActive || isHighlighted)
+                ? [
+                    BoxShadow(
+                      color: isHighlighted 
+                          ? Colors.yellow.withOpacity(0.7)
+                          : const Color(0xFFe94560).withOpacity(0.5),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFe94560).withOpacity(0.5),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : null,
-        ),
         child: Stack(
           children: [
             Padding(
@@ -230,8 +258,11 @@ class PlayerPortraitWidget extends StatelessWidget {
               ),
           ],
         ),
-      ),
+      );
+      },
     );
+    },
+  );
   }
 
   Widget _buildStatBar(String label, int current, int max, Color color, bool isDead) {

@@ -21,6 +21,8 @@ class BattleController extends ChangeNotifier {
   bool _showSkills = false;
   bool _attackUsed = false;
   bool _cardPlayedThisTurn = false;
+  ActionCard? _drawnCard;
+  bool _showCardDrawPopup = false;
 
   BattleController(this._battle) {
     _initializeBattle();
@@ -34,6 +36,8 @@ class BattleController extends ChangeNotifier {
   bool get showPhaseIndicator => _showPhaseIndicator;
   bool get showInventory => _showInventory;
   bool get showSkills => _showSkills;
+  ActionCard? get drawnCard => _drawnCard;
+  bool get showCardDrawPopup => _showCardDrawPopup;
 
   void _initializeBattle() {
     if (_battle.status == BattleStatus.waiting) {
@@ -54,6 +58,12 @@ class BattleController extends ChangeNotifier {
     
     _addBattleLog('Battle Started!', 'System');
     _showPhaseIndicatorWithDelay();
+    
+    // Start the first player's turn immediately
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      startTurn();
+    });
+    
     notifyListeners();
   }
 
@@ -68,10 +78,13 @@ class BattleController extends ChangeNotifier {
   }
 
   BattlePlayer? getCurrentPlayer() {
-    return _battle.players.firstWhere(
-      (player) => player.id == _battle.currentPlayerId,
-      orElse: () => _battle.players.first,
-    );
+    try {
+      return _battle.players.firstWhere(
+        (player) => player.id == _battle.currentPlayerId,
+      );
+    } catch (e) {
+      return _battle.players.isNotEmpty ? _battle.players.first : null;
+    }
   }
 
   BattlePlayer? getPlayerById(String playerId) {
@@ -80,6 +93,27 @@ class BattleController extends ChangeNotifier {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Determines team based on player index (even = team A, odd = team B)
+  int getPlayerTeam(String playerId) {
+    final playerIndex = _battle.players.indexWhere((p) => p.id == playerId);
+    return playerIndex % 2; // 0 = Team A, 1 = Team B
+  }
+
+  /// Gets team members for a given team
+  List<BattlePlayer> getTeamMembers(int team) {
+    return _battle.players.where((player) {
+      final index = _battle.players.indexOf(player);
+      return index % 2 == team;
+    }).toList();
+  }
+
+  /// Check if player is on friendly team relative to current player
+  bool isFriendly(String playerId) {
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    return getPlayerTeam(playerId) == getPlayerTeam(currentPlayer.id);
   }
 
   // Card Management
@@ -99,6 +133,12 @@ class BattleController extends ChangeNotifier {
 
   void selectTarget(String targetId) {
     _selectedTargetId = targetId;
+    
+    // If we have a selected card and target, play the card automatically
+    if (_selectedCard != null && _selectedTargetId != null) {
+      playCardOnTarget(_selectedCard!, _selectedTargetId!);
+    }
+    
     notifyListeners();
   }
 
@@ -125,6 +165,8 @@ class BattleController extends ChangeNotifier {
   }
 
   void playCard(ActionCard card) {
+    // For now, keep the old method for non-targeted cards
+    // Most cards should use playCardOnTarget instead
     if (!canPlayCard(card)) {
       _addBattleLog('Cannot play ${card.name}', getCurrentPlayer()?.name ?? 'Unknown');
       return;
@@ -132,6 +174,20 @@ class BattleController extends ChangeNotifier {
     
     final currentPlayer = getCurrentPlayer();
     if (currentPlayer == null) return;
+    
+    // Apply to self by default
+    playCardOnTarget(card, currentPlayer.id);
+  }
+
+  void playCardOnTarget(ActionCard card, String targetId) {
+    if (!canPlayCard(card)) {
+      _addBattleLog('Cannot play ${card.name}', getCurrentPlayer()?.name ?? 'Unknown');
+      return;
+    }
+    
+    final currentPlayer = getCurrentPlayer();
+    final target = getPlayerById(targetId);
+    if (currentPlayer == null || target == null) return;
     
     // Remove card from hand
     final updatedHand = List<ActionCard>.from(currentPlayer.hand);
@@ -145,13 +201,14 @@ class BattleController extends ChangeNotifier {
     
     _updatePlayer(updatedPlayer);
     
-    // Apply card effect
-    _applyCardEffect(card, currentPlayer);
+    // Apply card effect to target
+    _applyCardEffectToTarget(card, currentPlayer, target);
     
     _cardPlayedThisTurn = true;
     _selectedCard = null;
+    _selectedTargetId = null;
     
-    _addBattleLog('${currentPlayer.name} played ${card.name}', currentPlayer.name);
+    _addBattleLog('${currentPlayer.name} played ${card.name} on ${target.name}', currentPlayer.name);
     
     // Check if card allows additional actions
     if (card.effect.contains('also_attack')) {
@@ -162,6 +219,11 @@ class BattleController extends ChangeNotifier {
   }
 
   void _applyCardEffect(ActionCard card, BattlePlayer player) {
+    // Redirect to target-based system
+    _applyCardEffectToTarget(card, player, player);
+  }
+
+  void _applyCardEffectToTarget(ActionCard card, BattlePlayer caster, BattlePlayer target) {
     final effects = card.effect.split(',');
     
     for (final effect in effects) {
@@ -172,45 +234,54 @@ class BattleController extends ChangeNotifier {
       switch (effectType) {
         case 'damage_bonus':
           final bonus = int.tryParse(effectValue) ?? 0;
-          _addBattleLog('${player.name} gains +$bonus attack damage!', player.name);
+          _addBattleLog('${target.name} gains +$bonus attack damage!', caster.name);
+          // TODO: Apply damage bonus status effect
           break;
           
         case 'double_damage':
-          _addBattleLog('${player.name}\'s next attack will deal double damage!', player.name);
+          _addBattleLog('${target.name}\'s next attack will deal double damage!', caster.name);
+          // TODO: Apply double damage status effect
           break;
           
         case 'half_damage':
-          _addBattleLog('${player.name}\'s next attack will deal half damage!', player.name);
+          _addBattleLog('${target.name}\'s next attack will deal half damage!', caster.name);
+          // TODO: Apply damage reduction status effect
           break;
           
         case 'skip_turn':
-          _addBattleLog('${player.name} must skip their next turn!', player.name);
+          _addBattleLog('${target.name} must skip their next turn!', caster.name);
+          // TODO: Apply skip turn status effect
           break;
           
         case 'counter_next':
-          _addBattleLog('${player.name} prepares to counter the next attack!', player.name);
+          _addBattleLog('${target.name} prepares to counter the next attack!', caster.name);
+          // TODO: Apply counter status effect
           break;
           
         case 'cancel_action':
-          _addBattleLog('${player.name} cancels the opponent\'s action!', player.name);
+          _addBattleLog('${caster.name} cancels ${target.name}\'s action!', caster.name);
+          // TODO: Implement action cancellation
           break;
           
         case 'heal':
           final healAmount = int.tryParse(effectValue) ?? 0;
-          _healPlayer(player.id, healAmount);
+          _healPlayer(target.id, healAmount);
           break;
           
         case 'mana_bonus':
           final manaBonus = int.tryParse(effectValue) ?? 0;
-          _restoreMana(player.id, manaBonus);
+          _restoreMana(target.id, manaBonus);
           break;
           
         case 'discard_random_opponent_card':
-          _discardRandomOpponentCard(player.id);
+          if (!isFriendly(target.id)) {
+            _discardRandomCard(target.id);
+          }
           break;
           
         case 'gain_1_extra_attack':
-          _addBattleLog('${player.name} gains an extra attack this turn!', player.name);
+          _addBattleLog('${target.name} gains an extra attack this turn!', caster.name);
+          // TODO: Apply extra attack status effect
           break;
       }
     }
@@ -238,33 +309,36 @@ class BattleController extends ChangeNotifier {
     _addBattleLog('${player.name} restores $amount MP (${player.currentMana} → $newMana)', player.name);
   }
 
-  void _discardRandomOpponentCard(String playerId) {
-    final opponents = _battle.players.where((p) => p.id != playerId).toList();
-    if (opponents.isEmpty) return;
+  void _discardRandomCard(String playerId) {
+    final player = getPlayerById(playerId);
+    if (player == null || player.hand.isEmpty) return;
     
     final random = math.Random();
-    final opponent = opponents[random.nextInt(opponents.length)];
+    final cardToDiscard = player.hand[random.nextInt(player.hand.length)];
+    final updatedHand = List<ActionCard>.from(player.hand);
+    updatedHand.remove(cardToDiscard);
     
-    if (opponent.hand.isNotEmpty) {
-      final cardToDiscard = opponent.hand[random.nextInt(opponent.hand.length)];
-      final updatedHand = List<ActionCard>.from(opponent.hand);
-      updatedHand.remove(cardToDiscard);
-      
-      final updatedOpponent = opponent.copyWith(hand: updatedHand);
-      _updatePlayer(updatedOpponent);
-      
-      _addBattleLog('${opponent.name} discards ${cardToDiscard.name}', opponent.name);
-    }
+    final updatedPlayer = player.copyWith(hand: updatedHand);
+    _updatePlayer(updatedPlayer);
+    
+    _addBattleLog('${player.name} discards ${cardToDiscard.name}', player.name);
   }
 
-  // Attack System
+  // Attack System with REBALANCED COSTS
   bool canAttack() {
     if (_currentPhase != BattlePhase.attackPhase) return false;
     if (_attackUsed) return false;
     if (_selectedTargetId == null) return false;
     
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    
+    // NEW: Attacks now cost significant mana (70-80% of max mana)
+    final attackCost = (currentPlayer.maxMana * 0.75).round();
+    if (currentPlayer.currentMana < attackCost) return false;
+    
     final target = getPlayerById(_selectedTargetId!);
-    return target != null && target.id != getCurrentPlayer()?.id;
+    return target != null;
   }
 
   void performAttack() {
@@ -274,6 +348,15 @@ class BattleController extends ChangeNotifier {
     final target = getPlayerById(_selectedTargetId!);
     
     if (attacker == null || target == null) return;
+    
+    // Calculate attack cost (75% of max mana)
+    final attackCost = (attacker.maxMana * 0.75).round();
+    
+    // Deduct mana for attack
+    final updatedAttacker = attacker.copyWith(
+      currentMana: math.max(0, attacker.currentMana - attackCost),
+    );
+    _updatePlayer(updatedAttacker);
     
     // Calculate damage
     int baseDamage = attacker.character.attack;
@@ -289,11 +372,12 @@ class BattleController extends ChangeNotifier {
     _updatePlayer(updatedTarget);
     
     _addBattleLog(
-      '${attacker.name} attacks ${target.name} for $finalDamage damage! (${target.currentHealth} → $newHealth HP)',
+      '${attacker.name} attacks ${target.name} for $finalDamage damage! (${target.currentHealth} → $newHealth HP) [-$attackCost MP]',
       attacker.name,
     );
     
     _attackUsed = true;
+    _selectedTargetId = null;
     
     // Check if target is defeated
     if (newHealth <= 0) {
@@ -375,7 +459,7 @@ class BattleController extends ChangeNotifier {
     }
   }
 
-  // Turn Management
+  // Turn Management with TEAM ALTERNATION
   void startTurn() {
     _currentPhase = BattlePhase.startTurn;
     _attackUsed = false;
@@ -385,11 +469,11 @@ class BattleController extends ChangeNotifier {
     
     final currentPlayer = getCurrentPlayer();
     if (currentPlayer != null) {
-      // Draw a card at the start of turn
-      _drawCards(currentPlayer.id, 1);
+      // Draw a card at the start of turn with popup
+      _drawCardWithPopup(currentPlayer.id);
       
-      // Restore some mana
-      final manaRestore = math.min(2, currentPlayer.maxMana - currentPlayer.currentMana);
+      // Restore some mana (25% of max mana per turn)
+      final manaRestore = (currentPlayer.maxMana * 0.25).round();
       if (manaRestore > 0) {
         _restoreMana(currentPlayer.id, manaRestore);
       }
@@ -401,6 +485,68 @@ class BattleController extends ChangeNotifier {
     _currentPhase = BattlePhase.playPhase;
     _showPhaseIndicatorWithDelay();
     notifyListeners();
+  }
+
+  void _drawCardWithPopup(String playerId) {
+    final player = getPlayerById(playerId);
+    if (player == null) return;
+    
+    final availableCards = List<ActionCard>.from(player.actionDeck);
+    if (availableCards.isNotEmpty) {
+      final random = math.Random();
+      final cardIndex = random.nextInt(availableCards.length);
+      final drawnCard = availableCards[cardIndex];
+      
+      _drawnCard = drawnCard;
+      _showCardDrawPopup = true;
+      notifyListeners();
+    }
+  }
+
+  void acceptDrawnCard() {
+    final currentPlayer = getCurrentPlayer();
+    final drawnCard = _drawnCard;
+    
+    if (currentPlayer == null || drawnCard == null) return;
+    
+    final updatedHand = List<ActionCard>.from(currentPlayer.hand);
+    
+    if (updatedHand.length >= 10) {
+      // Hand is full - need to choose which card to discard
+      _showHandOverflowDialog();
+      return;
+    }
+    
+    updatedHand.add(drawnCard);
+    final updatedPlayer = currentPlayer.copyWith(hand: updatedHand);
+    _updatePlayer(updatedPlayer);
+    
+    _addBattleLog('${currentPlayer.name} adds ${drawnCard.name} to hand.', currentPlayer.name);
+    
+    _dismissCardDrawPopup();
+  }
+
+  void discardDrawnCard() {
+    final currentPlayer = getCurrentPlayer();
+    final drawnCard = _drawnCard;
+    
+    if (currentPlayer == null || drawnCard == null) return;
+    
+    _addBattleLog('${currentPlayer.name} discards ${drawnCard.name}.', currentPlayer.name);
+    
+    _dismissCardDrawPopup();
+  }
+
+  void _dismissCardDrawPopup() {
+    _drawnCard = null;
+    _showCardDrawPopup = false;
+    notifyListeners();
+  }
+
+  void _showHandOverflowDialog() {
+    // This will be handled in the UI layer
+    // For now, auto-discard the drawn card
+    discardDrawnCard();
   }
 
   void moveToAttackPhase() {
@@ -425,8 +571,8 @@ class BattleController extends ChangeNotifier {
       _addBattleLog('${currentPlayer.name}\'s turn ends.', currentPlayer.name);
     }
     
-    // Move to next player
-    _moveToNextPlayer();
+    // Move to next player using TEAM ALTERNATION
+    _moveToNextPlayerTeamBased();
     
     // Start next turn
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -436,54 +582,61 @@ class BattleController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _moveToNextPlayer() {
+  void _moveToNextPlayerTeamBased() {
     final currentPlayerIndex = _battle.players.indexWhere((p) => p.id == _battle.currentPlayerId);
     if (currentPlayerIndex == -1) return;
     
-    // Find next alive player
-    int nextIndex = (currentPlayerIndex + 1) % _battle.players.length;
-    while (_battle.players[nextIndex].currentHealth <= 0 && nextIndex != currentPlayerIndex) {
-      nextIndex = (nextIndex + 1) % _battle.players.length;
-    }
+    final currentTeam = getPlayerTeam(_battle.currentPlayerId);
+    final opposingTeam = currentTeam == 0 ? 1 : 0;
     
-    _battle = _battle.copyWith(
-      currentPlayerId: _battle.players[nextIndex].id,
-      currentTurn: _battle.currentTurn + 1,
-    );
-  }
-
-  void _drawCards(String playerId, int count) {
-    final player = getPlayerById(playerId);
-    if (player == null) return;
+    // Get alive players from opposing team
+    final opposingTeamPlayers = getTeamMembers(opposingTeam).where((p) => p.currentHealth > 0).toList();
     
-    final updatedHand = List<ActionCard>.from(player.hand);
-    final availableCards = List<ActionCard>.from(player.actionDeck);
-    
-    for (int i = 0; i < count && availableCards.isNotEmpty && updatedHand.length < 10; i++) {
-      final random = math.Random();
-      final cardIndex = random.nextInt(availableCards.length);
-      final drawnCard = availableCards[cardIndex];
+    if (opposingTeamPlayers.isNotEmpty) {
+      // Find next player in opposing team
+      // Use round-robin within the team
+      final currentOpposingIndex = opposingTeamPlayers.indexWhere((p) => 
+          _battle.players.indexOf(p) > currentPlayerIndex);
       
-      updatedHand.add(drawnCard);
-      // Note: In a real game, you'd remove from deck, but for testing we keep it available
-    }
-    
-    final updatedPlayer = player.copyWith(hand: updatedHand);
-    _updatePlayer(updatedPlayer);
-    
-    if (count == 1) {
-      _addBattleLog('${player.name} draws a card.', player.name);
+      if (currentOpposingIndex != -1) {
+        // Found a player in opposing team after current player
+        _battle = _battle.copyWith(
+          currentPlayerId: opposingTeamPlayers[currentOpposingIndex].id,
+          currentTurn: _battle.currentTurn + 1,
+        );
+      } else {
+        // No player found after current, take first alive opposing team player
+        _battle = _battle.copyWith(
+          currentPlayerId: opposingTeamPlayers.first.id,
+          currentTurn: _battle.currentTurn + 1,
+        );
+      }
     } else {
-      _addBattleLog('${player.name} draws $count cards.', player.name);
+      // No alive players in opposing team, continue with current team
+      final currentTeamPlayers = getTeamMembers(currentTeam).where((p) => p.currentHealth > 0).toList();
+      if (currentTeamPlayers.isNotEmpty) {
+        final nextInTeam = currentTeamPlayers.firstWhere(
+          (p) => _battle.players.indexOf(p) > currentPlayerIndex,
+          orElse: () => currentTeamPlayers.first,
+        );
+        
+        _battle = _battle.copyWith(
+          currentPlayerId: nextInTeam.id,
+          currentTurn: _battle.currentTurn + 1,
+        );
+      }
     }
   }
 
   // Battle Management
   void _checkBattleEnd() {
-    final alivePlayers = _battle.players.where((p) => p.currentHealth > 0).toList();
+    final team0Players = getTeamMembers(0).where((p) => p.currentHealth > 0).toList();
+    final team1Players = getTeamMembers(1).where((p) => p.currentHealth > 0).toList();
     
-    if (alivePlayers.length <= 1) {
-      final winner = alivePlayers.isNotEmpty ? alivePlayers.first : null;
+    if (team0Players.isEmpty || team1Players.isEmpty) {
+      final winningTeam = team0Players.isNotEmpty ? 0 : 1;
+      final winningPlayers = winningTeam == 0 ? team0Players : team1Players;
+      final winner = winningPlayers.isNotEmpty ? winningPlayers.first : null;
       
       _battle = _battle.copyWith(
         status: BattleStatus.finished,
@@ -492,7 +645,7 @@ class BattleController extends ChangeNotifier {
       );
       
       if (winner != null) {
-        _addBattleLog('${winner.name} is victorious!', 'System');
+        _addBattleLog('Team ${winningTeam + 1} is victorious!', 'System');
       } else {
         _addBattleLog('Battle ended in a draw!', 'System');
       }

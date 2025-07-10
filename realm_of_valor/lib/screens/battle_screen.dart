@@ -110,6 +110,10 @@ class _BattleScreenState extends State<BattleScreen>
                 if (battleController.showPhaseIndicator)
                   _buildPhaseIndicator(battleController),
                 
+                // Card Draw Popup
+                if (battleController.showCardDrawPopup)
+                  _buildCardDrawPopup(battleController),
+                
                 // Battle Result Dialog
                 if (battleController.battle.status == BattleStatus.finished)
                   _buildBattleResultDialog(battleController),
@@ -203,6 +207,8 @@ class _BattleScreenState extends State<BattleScreen>
                       isActive: controller.battle.currentPlayerId == players[1].id,
                       isOpponent: true,
                       onTap: () => controller.selectTarget(players[1].id),
+                      onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                      onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
                     ),
                   ),
               ],
@@ -229,6 +235,8 @@ class _BattleScreenState extends State<BattleScreen>
                     isActive: controller.battle.currentPlayerId == players[0].id,
                     isOpponent: false,
                     onTap: () => controller.selectTarget(players[0].id),
+                    onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                    onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
                   ),
                 ),
               ],
@@ -248,21 +256,25 @@ class _BattleScreenState extends State<BattleScreen>
             children: [
               if (players.length > 1)
                 Expanded(
-                  child: PlayerPortraitWidget(
+                                                       child: PlayerPortraitWidget(
                     player: players[1],
                     isActive: controller.battle.currentPlayerId == players[1].id,
                     isOpponent: true,
                     onTap: () => controller.selectTarget(players[1].id),
+                    onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                    onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
                   ),
                 ),
               if (players.length > 2)
                 Expanded(
-                  child: PlayerPortraitWidget(
-                    player: players[2],
-                    isActive: controller.battle.currentPlayerId == players[2].id,
-                    isOpponent: true,
-                    onTap: () => controller.selectTarget(players[2].id),
-                  ),
+                                                           child: PlayerPortraitWidget(
+                      player: players[2],
+                      isActive: controller.battle.currentPlayerId == players[2].id,
+                      isOpponent: true,
+                      onTap: () => controller.selectTarget(players[2].id),
+                      onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                      onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    ),
                 ),
             ],
           ),
@@ -288,11 +300,13 @@ class _BattleScreenState extends State<BattleScreen>
               ),
               if (players.length > 3)
                 Expanded(
-                  child: PlayerPortraitWidget(
+                                                       child: PlayerPortraitWidget(
                     player: players[3],
                     isActive: controller.battle.currentPlayerId == players[3].id,
                     isOpponent: false,
                     onTap: () => controller.selectTarget(players[3].id),
+                    onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                    onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
                   ),
                 ),
             ],
@@ -311,11 +325,13 @@ class _BattleScreenState extends State<BattleScreen>
             children: [
               for (int i = 1; i < 4 && i < players.length)
                 Expanded(
-                  child: PlayerPortraitWidget(
+                                                       child: PlayerPortraitWidget(
                     player: players[i],
                     isActive: controller.battle.currentPlayerId == players[i].id,
                     isOpponent: true,
                     onTap: () => controller.selectTarget(players[i].id),
+                    onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                    onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
                   ),
                 ),
             ],
@@ -340,15 +356,17 @@ class _BattleScreenState extends State<BattleScreen>
                   onTap: () => controller.selectTarget(players[0].id),
                 ),
               ),
-              for (int i = 4; i < 6 && i < players.length)
-                Expanded(
-                  child: PlayerPortraitWidget(
-                    player: players[i],
-                    isActive: controller.battle.currentPlayerId == players[i].id,
-                    isOpponent: false,
-                    onTap: () => controller.selectTarget(players[i].id),
+                             for (int i = 4; i < 6 && i < players.length)
+                                   Expanded(
+                    child: PlayerPortraitWidget(
+                      player: players[i],
+                      isActive: controller.battle.currentPlayerId == players[i].id,
+                      isOpponent: false,
+                      onTap: () => controller.selectTarget(players[i].id),
+                      onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                      onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    ),
                   ),
-                ),
             ],
           ),
         ),
@@ -596,12 +614,62 @@ class _BattleScreenState extends State<BattleScreen>
             padding: const EdgeInsets.all(8),
             child: Row(
               children: [
-                _buildActionButton(
-                  'Attack',
-                  Icons.sword,
-                  controller.canAttack(),
-                  () => controller.performAttack(),
-                ),
+                controller.currentPhase == BattlePhase.attackPhase && !controller.battle.players.any((p) => p.id == controller.battle.currentPlayerId && (p.currentMana * 0.75).round() > p.currentMana)
+                    ? Draggable<String>(
+                        data: 'ATTACK',
+                        feedback: Material(
+                          color: Colors.transparent,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFe94560),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.3),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.flash_on, color: Colors.white, size: 20),
+                                SizedBox(width: 4),
+                                Text(
+                                  'ATTACK',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        childWhenDragging: Opacity(
+                          opacity: 0.5,
+                          child: _buildActionButton(
+                            'Attack',
+                            Icons.flash_on,
+                            false,
+                            () {},
+                          ),
+                        ),
+                        child: _buildActionButton(
+                          'Attack',
+                          Icons.flash_on,
+                          controller.canAttack(),
+                          () => controller.performAttack(),
+                        ),
+                      )
+                    : _buildActionButton(
+                        'Attack',
+                        Icons.flash_on,
+                        controller.canAttack(),
+                        () => controller.performAttack(),
+                      ),
                 const SizedBox(width: 8),
                 _buildActionButton(
                   'End Turn',
@@ -683,13 +751,50 @@ class _BattleScreenState extends State<BattleScreen>
         return Container(
           width: 100,
           margin: const EdgeInsets.only(right: 8),
-          child: BattleCardWidget(
-            card: card,
-            canPlay: canPlay,
-            isSelected: controller.selectedCard == card,
-            onTap: () => controller.selectCard(card),
-            onPlay: () => controller.playCard(card),
-          ),
+          child: canPlay 
+              ? Draggable<ActionCard>(
+                  data: card,
+                  feedback: Material(
+                    color: Colors.transparent,
+                    child: Transform.scale(
+                      scale: 1.2,
+                      child: Container(
+                        width: 100,
+                        child: BattleCardWidget(
+                          card: card,
+                          canPlay: true,
+                          isSelected: true,
+                          onTap: () {},
+                          onPlay: () {},
+                        ),
+                      ),
+                    ),
+                  ),
+                  childWhenDragging: Opacity(
+                    opacity: 0.5,
+                    child: BattleCardWidget(
+                      card: card,
+                      canPlay: false,
+                      isSelected: false,
+                      onTap: () {},
+                      onPlay: () {},
+                    ),
+                  ),
+                  child: BattleCardWidget(
+                    card: card,
+                    canPlay: canPlay,
+                    isSelected: controller.selectedCard == card,
+                    onTap: () => controller.selectCard(card),
+                    onPlay: () => controller.playCard(card),
+                  ),
+                )
+              : BattleCardWidget(
+                  card: card,
+                  canPlay: canPlay,
+                  isSelected: controller.selectedCard == card,
+                  onTap: () => controller.selectCard(card),
+                  onPlay: () => controller.playCard(card),
+                ),
         );
       },
     );
@@ -716,6 +821,132 @@ class _BattleScreenState extends State<BattleScreen>
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.bold,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCardDrawPopup(BattleController controller) {
+    final drawnCard = controller.drawnCard;
+    if (drawnCard == null) return const SizedBox();
+
+    final currentPlayer = controller.getCurrentPlayer();
+    final canAddToHand = currentPlayer != null && currentPlayer.hand.length < 10;
+
+    return Container(
+      color: Colors.black54,
+      child: Center(
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: const Color(0xFF0f3460),
+            borderRadius: BorderRadius.circular(15),
+            border: Border.all(color: const Color(0xFFe94560), width: 2),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Card Drawn!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Card Display
+              Container(
+                width: 200,
+                height: 280,
+                child: BattleCardWidget(
+                  card: drawnCard,
+                  canPlay: true,
+                  isSelected: false,
+                  onTap: () {},
+                  onPlay: () {},
+                ),
+              ),
+              
+              const SizedBox(height: 16),
+              
+              // Hand Status
+              if (currentPlayer != null)
+                Text(
+                  'Hand: ${currentPlayer.hand.length}/10 cards',
+                  style: TextStyle(
+                    color: canAddToHand ? Colors.white : Colors.orange,
+                    fontSize: 14,
+                  ),
+                ),
+              
+              const SizedBox(height: 24),
+              
+              // Action Buttons
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // Discard Button
+                  ElevatedButton.icon(
+                    onPressed: () => controller.discardDrawnCard(),
+                    icon: const Icon(Icons.delete),
+                    label: const Text('Discard'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                  
+                  // Add to Hand Button
+                  ElevatedButton.icon(
+                    onPressed: canAddToHand 
+                        ? () => controller.acceptDrawnCard()
+                        : null,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add to Hand'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: canAddToHand 
+                          ? const Color(0xFFe94560) 
+                          : Colors.grey,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+              
+              // Hand Full Warning
+              if (!canAddToHand)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.orange.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.orange),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.warning, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Your hand is full! You must discard this card or discard another card from your hand.',
+                            style: TextStyle(
+                              color: Colors.orange,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
           ),
         ),
       ),
@@ -772,6 +1003,12 @@ class _BattleScreenState extends State<BattleScreen>
         ),
       ),
     );
+  }
+
+  void _performDragAttack(BattleController controller, String targetId) {
+    // Set the target and perform attack
+    controller.selectTarget(targetId);
+    controller.performAttack();
   }
 
   void _showBattleMenu(BuildContext context, BattleController controller) {
