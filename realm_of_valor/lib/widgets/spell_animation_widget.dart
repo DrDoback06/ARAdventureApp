@@ -498,7 +498,7 @@ class _SpellCastingAnimationState extends State<SpellCastingAnimation>
               gradient: RadialGradient(
                 colors: [
                   Colors.purple.withOpacity(0.8),
-                  Colors.magenta.withOpacity(0.6),
+                  Colors.pink.withOpacity(0.6),
                   Colors.transparent,
                 ],
               ),
@@ -597,7 +597,7 @@ class _SpellCastingAnimationState extends State<SpellCastingAnimation>
     } else if (spellName.contains('water') || spellName.contains('wave')) {
       return [Colors.blue, Colors.lightBlue, Colors.cyan];
     } else if (spellName.contains('light') || spellName.contains('divine')) {
-      return [Colors.white, Colors.yellow, Colors.gold];
+      return [Colors.white, Colors.yellow, Colors.amber];
     } else if (spellName.contains('shadow') || spellName.contains('dark')) {
       return [Colors.black, Colors.purple.shade900, Colors.grey.shade800];
     } else if (spellName.contains('heal') || spellName.contains('cure')) {
