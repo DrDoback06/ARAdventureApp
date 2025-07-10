@@ -309,7 +309,7 @@ class _BattleScreenState extends State<BattleScreen>
         Expanded(
           child: Row(
             children: [
-              for (int i = 1; i < 4 && i < players.length)
+              for (int i = 1; i < 4 && i < players.length; i++)
                 Expanded(
                   child: PlayerPortraitWidget(
                     player: players[i],
@@ -340,7 +340,7 @@ class _BattleScreenState extends State<BattleScreen>
                   onTap: () => controller.selectTarget(players[0].id),
                 ),
               ),
-              for (int i = 4; i < 6 && i < players.length)
+              for (int i = 4; i < 6 && i < players.length; i++)
                 Expanded(
                   child: PlayerPortraitWidget(
                     player: players[i],
@@ -474,7 +474,7 @@ class _BattleScreenState extends State<BattleScreen>
         ),
         const SizedBox(height: 8),
         // Show equipped items (read-only for now)
-        ...currentPlayer.character.equippedItems.map((item) => 
+        ...currentPlayer.character.equipment.getAllEquippedItems().map((item) => 
           Container(
             margin: const EdgeInsets.only(bottom: 4),
             padding: const EdgeInsets.all(8),
@@ -487,7 +487,7 @@ class _BattleScreenState extends State<BattleScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item.name,
+                  item.card.name,
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 12,
@@ -495,7 +495,7 @@ class _BattleScreenState extends State<BattleScreen>
                   ),
                 ),
                 Text(
-                  'ATK: ${item.attack} DEF: ${item.defense}',
+                  'ATK: ${item.card.attack} DEF: ${item.card.defense}',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.7),
                     fontSize: 10,
@@ -598,7 +598,7 @@ class _BattleScreenState extends State<BattleScreen>
               children: [
                 _buildActionButton(
                   'Attack',
-                  Icons.sword,
+                  Icons.local_fire_department,
                   controller.canAttack(),
                   () => controller.performAttack(),
                 ),

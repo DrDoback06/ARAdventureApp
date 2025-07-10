@@ -276,7 +276,7 @@ class BattleController extends ChangeNotifier {
     if (attacker == null || target == null) return;
     
     // Calculate damage
-    int baseDamage = attacker.character.attack;
+    int baseDamage = attacker.character.attackRating;
     
     // Apply status effects and modifiers here
     // TODO: Implement status effect calculations

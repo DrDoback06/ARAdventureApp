@@ -61,17 +61,17 @@ class BattleTestUtils {
       characterClass: characterClass,
       level: level,
       experience: level * 100,
-      experienceToNext: (level + 1) * 100,
-      maxHealth: baseStats['health']!,
-      maxMana: baseStats['mana']!,
-      attack: baseStats['attack']!,
-      defense: baseStats['defense']!,
-      strength: baseStats['strength']!,
-      agility: baseStats['agility']!,
-      intelligence: baseStats['intelligence']!,
-      equippedItems: _createTestEquipment(characterClass),
-      skillPoints: 10,
-      gold: 500,
+      baseStrength: baseStats['strength']!,
+      baseDexterity: baseStats['agility']!,
+      baseVitality: baseStats['health']! ~/ 10, // Convert health to vitality
+      baseEnergy: baseStats['mana']! ~/ 5, // Convert mana to energy
+      allocatedStrength: baseStats['strength']! - 10,
+      allocatedDexterity: baseStats['agility']! - 10,
+      allocatedVitality: 0,
+      allocatedEnergy: 0,
+      availableStatPoints: 0,
+      availableSkillPoints: 10,
+      equipment: Equipment(),
     );
   }
   
@@ -446,16 +446,21 @@ class BattleTestUtils {
     final bossPlayer = battle.players[1];
     final bossCharacter = bossPlayer.character.copyWith(
       name: 'Ancient Dragon',
-      maxHealth: 200,
-      attack: 40,
-      defense: 25,
+      baseStrength: 30,
+      baseDexterity: 20,
+      baseVitality: 35,
+      baseEnergy: 25,
+      allocatedStrength: 10,
+      allocatedDexterity: 5,
+      allocatedVitality: 10,
+      allocatedEnergy: 5,
     );
     
     final enhancedBoss = bossPlayer.copyWith(
       name: 'Ancient Dragon',
       character: bossCharacter,
-      currentHealth: 200,
-      maxHealth: 200,
+      currentHealth: bossCharacter.maxHealth,
+      maxHealth: bossCharacter.maxHealth,
     );
     
     final updatedPlayers = [battle.players[0], enhancedBoss];

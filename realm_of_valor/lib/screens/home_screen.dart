@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/character_model.dart';
 import '../models/card_model.dart';
+import '../models/battle_model.dart';
 import '../providers/character_provider.dart';
 import '../services/card_service.dart';
 import '../constants/theme.dart';

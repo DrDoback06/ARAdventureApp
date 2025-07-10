@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/battle_model.dart';
+import '../models/card_model.dart';
 
 class PlayerPortraitWidget extends StatelessWidget {
   final BattlePlayer player;
@@ -136,8 +137,8 @@ class PlayerPortraitWidget extends StatelessWidget {
                     children: [
                       _buildStatDisplay(
                         'ATK',
-                        player.character.attack,
-                        Icons.sword,
+                        player.character.attackRating,
+                        Icons.local_fire_department,
                         isDead ? Colors.grey : Colors.orange,
                         isDead,
                       ),
