@@ -603,7 +603,7 @@ class _SpellCastingAnimationState extends State<SpellCastingAnimation>
     } else if (spellName.contains('heal') || spellName.contains('cure')) {
       return [Colors.green, Colors.lightGreen, Colors.white];
     } else if (spellName.contains('arcane') || spellName.contains('magic')) {
-      return [Colors.purple, Colors.magenta, Colors.white];
+      return [Colors.purple, Colors.pink, Colors.white];
     } else {
       return [Colors.blue, Colors.cyan, Colors.white];
     }
