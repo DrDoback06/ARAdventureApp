@@ -258,7 +258,7 @@ class _ParticleSystemState extends State<ParticleSystem>
         
       case ParticleType.light:
         return ParticleConfig(
-          colors: [Colors.white, Colors.yellow, Colors.gold],
+          colors: [Colors.white, Colors.yellow, Colors.amber],
           minSize: 5.0,
           maxSize: 15.0,
           minLife: 1.0,
@@ -366,7 +366,7 @@ class _ParticleSystemState extends State<ParticleSystem>
         
       case ParticleType.dispel:
         return ParticleConfig(
-          colors: [Colors.purple, Colors.magenta, Colors.white],
+          colors: [Colors.purple, Colors.pink, Colors.white],
           minSize: 6.0,
           maxSize: 14.0,
           minLife: 1.0,
@@ -510,7 +510,7 @@ class ParticlePainter extends CustomPainter {
       canvas.rotate(particle.rotation);
       
       // Different shapes for different effects
-      if (particle.color.value == Colors.lightning.value || 
+      if (particle.color.value == Colors.lightBlue.value || 
           particle.color.value == Colors.yellow.value) {
         // Lightning - jagged shape
         _drawLightning(canvas, paint, particle.size);
