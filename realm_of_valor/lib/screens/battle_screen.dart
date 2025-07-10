@@ -10,6 +10,7 @@ import '../widgets/spell_counter_widget.dart';
 import '../widgets/spell_animation_widget.dart';
 import '../widgets/status_effect_overlay.dart';
 import '../widgets/drag_arrow_widget.dart';
+import '../widgets/simple_test_widget.dart';
 import '../effects/particle_system.dart';
 
 class BattleScreen extends StatefulWidget {
@@ -193,6 +194,33 @@ class _BattleScreenState extends State<BattleScreen>
                           battleController.isValidDragTarget(battleController.hoveredTargetId!),
                     ),
                   ),
+                
+                // DEBUG: Test if enhanced features are loading
+                const Positioned(
+                  top: 50,
+                  right: 50,
+                  child: SimpleTestWidget(),
+                ),
+                
+                // DEBUG: Force drag test button
+                Positioned(
+                  top: 200,
+                  right: 50,
+                  child: ElevatedButton(
+                    onPressed: () {
+                      // Force trigger drag state for testing
+                      battleController.startAttackDrag(const Offset(100, 100));
+                      battleController.setHoveredTarget(battleController.battle.players.length > 1 
+                          ? battleController.battle.players[1].id 
+                          : battleController.battle.players[0].id);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('TEST DRAG'),
+                  ),
+                ),
               ],
             );
           },
