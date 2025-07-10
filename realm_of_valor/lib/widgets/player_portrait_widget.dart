@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/battle_model.dart';
+import 'package:realm_of_valor/widgets/status_effect_overlay.dart';
+import 'package:realm_of_valor/effects/particle_system.dart';
+import 'dart:math' as math;
 
 class PlayerPortraitWidget extends StatelessWidget {
   final BattlePlayer player;
@@ -22,24 +25,28 @@ class PlayerPortraitWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDead = player.currentHealth <= 0;
+    final statusEffects = _generateStatusEffectsFromPlayer();
     
-    return DragTarget<String>(
-      onAccept: (attack) {
-        if (attack == 'ATTACK' && onAttackDropped != null) {
-          onAttackDropped!(player.id);
-        }
-      },
-      onWillAccept: (attack) => attack == 'ATTACK' && !isDead,
-      builder: (context, attackCandidates, attackRejected) {
-        return DragTarget<ActionCard>(
-          onAccept: (card) {
-            if (onCardDropped != null) {
-              onCardDropped!(card, player.id);
-            }
-          },
-          onWillAccept: (card) => card != null && !isDead,
-          builder: (context, cardCandidates, cardRejected) {
-            final isHighlighted = cardCandidates.isNotEmpty || attackCandidates.isNotEmpty;
+    return StatusEffectOverlay(
+      statusEffects: statusEffects,
+      size: 120.0,
+      child: DragTarget<String>(
+        onAccept: (attack) {
+          if (attack == 'ATTACK' && onAttackDropped != null) {
+            onAttackDropped!(player.id);
+          }
+        },
+        onWillAccept: (attack) => attack == 'ATTACK' && !isDead,
+        builder: (context, attackCandidates, attackRejected) {
+          return DragTarget<ActionCard>(
+            onAccept: (card) {
+              if (onCardDropped != null) {
+                onCardDropped!(card, player.id);
+              }
+            },
+            onWillAccept: (card) => card != null && !isDead,
+            builder: (context, cardCandidates, cardRejected) {
+              final isHighlighted = cardCandidates.isNotEmpty || attackCandidates.isNotEmpty;
         
         return GestureDetector(
           onTap: onTap,
@@ -259,10 +266,11 @@ class PlayerPortraitWidget extends StatelessWidget {
           ],
         ),
       );
-      },
+            },
+          );
+        },
+      ),
     );
-    },
-  );
   }
 
   Widget _buildStatBar(String label, int current, int max, Color color, bool isDead) {
@@ -440,5 +448,115 @@ class PlayerPortraitWidget extends StatelessWidget {
       default:
         return Icons.help;
     }
+  }
+
+  /// Generate enhanced status effects with particle animations
+  List<StatusEffect> _generateStatusEffectsFromPlayer() {
+    final effects = <StatusEffect>[];
+    
+    // Convert player status effects to enhanced status effects
+    for (final entry in player.statusEffects.entries) {
+      final effectName = entry.key.toLowerCase();
+      final duration = entry.value;
+      
+      switch (effectName) {
+        case 'burn':
+        case 'burning':
+          effects.add(StatusEffect.burning(duration: duration));
+          break;
+        case 'freeze':
+        case 'frozen':
+          effects.add(StatusEffect.frozen(duration: duration));
+          break;
+        case 'shock':
+        case 'shocked':
+          effects.add(StatusEffect.shocked(duration: duration));
+          break;
+        case 'strength':
+        case 'strengthened':
+          effects.add(StatusEffect.strengthened(duration: duration));
+          break;
+        case 'shield':
+        case 'shielded':
+          effects.add(StatusEffect.shielded(duration: duration));
+          break;
+        case 'regenerating':
+        case 'heal':
+          effects.add(StatusEffect.regenerating(duration: duration));
+          break;
+        case 'weakened':
+        case 'weak':
+          effects.add(StatusEffect.weakened(duration: duration));
+          break;
+        case 'silenced':
+        case 'silence':
+          effects.add(StatusEffect.silenced(duration: duration));
+          break;
+        case 'blessed':
+        case 'blessing':
+          effects.add(StatusEffect.blessed(duration: duration));
+          break;
+        default:
+          // Create a generic effect for unknown status effects
+          effects.add(StatusEffect(
+            type: StatusEffectType.strengthened,
+            name: effectName.toUpperCase(),
+            description: 'Unknown effect',
+            duration: duration,
+            primaryColor: Colors.grey,
+            secondaryColor: Colors.blueGrey,
+            icon: Icons.help,
+            isPositive: true,
+          ));
+      }
+    }
+    
+    // Add dynamic effects based on player state
+    if (player.currentHealth < player.maxHealth * 0.3) {
+      // Player is critically wounded - add visual effect
+      effects.add(StatusEffect(
+        type: StatusEffectType.weakened,
+        name: 'Critical',
+        description: 'Critically wounded',
+        duration: 1,
+        primaryColor: Colors.red,
+        secondaryColor: Colors.orange,
+        icon: Icons.warning,
+        isPositive: false,
+        intensity: 1.5,
+      ));
+    }
+    
+    if (player.currentMana >= player.maxMana * 0.8) {
+      // Player has high mana - add magical aura
+      effects.add(StatusEffect(
+        type: StatusEffectType.magicPowered,
+        name: 'Energized',
+        description: 'High magical energy',
+        duration: 1,
+        primaryColor: Colors.blue,
+        secondaryColor: Colors.cyan,
+        icon: Icons.auto_awesome,
+        isPositive: true,
+        intensity: 0.8,
+      ));
+    }
+    
+    if (isActive) {
+      // Add active turn effect
+      effects.add(StatusEffect(
+        type: StatusEffectType.hastened,
+        name: 'Active',
+        description: 'Currently taking turn',
+        duration: 1,
+        primaryColor: Colors.yellow,
+        secondaryColor: Colors.orange,
+        icon: Icons.play_arrow,
+        isPositive: true,
+        intensity: 1.2,
+      ));
+    }
+    
+    return effects;
   }
 }

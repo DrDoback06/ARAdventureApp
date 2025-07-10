@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:realm_of_valor/models/spell_counter_system.dart';
 import 'package:realm_of_valor/models/battle_model.dart';
 import 'package:realm_of_valor/widgets/battle_card_widget.dart';
+import 'package:realm_of_valor/effects/particle_system.dart';
 import 'dart:async';
 
 class SpellCounterWidget extends StatefulWidget {
@@ -113,15 +114,33 @@ class _SpellCounterWidgetState extends State<SpellCounterWidget>
       return const SizedBox();
     }
 
-    return Container(
-      color: Colors.black.withOpacity(0.8),
-      child: Center(
-        child: AnimatedBuilder(
-          animation: _shakeAnimation,
-          builder: (context, child) {
-            return Transform.translate(
-              offset: Offset(_shakeAnimation.value, 0),
-              child: Container(
+    return Stack(
+      children: [
+        // Background overlay
+        Container(
+          color: Colors.black.withOpacity(0.8),
+        ),
+        
+        // Epic lightning particle effects during countdown! ⚡
+        ParticleSystem(
+          type: ParticleType.lightning,
+          center: Offset(MediaQuery.of(context).size.width * 0.5, MediaQuery.of(context).size.height * 0.3),
+          continuous: true,
+          intensity: _remainingSeconds <= 3 ? 2.0 : 1.2,
+          child: Container(),
+        ),
+        
+        // Additional particle effects based on spell type
+        if (pendingSpell != null) _buildSpellTypeParticles(pendingSpell),
+        
+        // Main content
+        Center(
+          child: AnimatedBuilder(
+            animation: _shakeAnimation,
+            builder: (context, child) {
+              return Transform.translate(
+                offset: Offset(_shakeAnimation.value, 0),
+                child: Container(
                 width: MediaQuery.of(context).size.width * 0.9,
                 constraints: const BoxConstraints(maxWidth: 600),
                 padding: const EdgeInsets.all(24),
@@ -445,6 +464,38 @@ class _SpellCounterWidgetState extends State<SpellCounterWidget>
             ),
           ),
       ],
+    );
+  }
+
+  /// Build spell-specific particle effects for extra visual flair! ✨⚡🔥
+  Widget _buildSpellTypeParticles(PendingSpell pendingSpell) {
+    final spellName = pendingSpell.spell.name.toLowerCase();
+    ParticleType particleType;
+    
+    if (spellName.contains('fire') || spellName.contains('flame')) {
+      particleType = ParticleType.fire;
+    } else if (spellName.contains('ice') || spellName.contains('frost')) {
+      particleType = ParticleType.ice;
+    } else if (spellName.contains('lightning') || spellName.contains('shock')) {
+      particleType = ParticleType.lightning;
+    } else if (spellName.contains('earth') || spellName.contains('stone')) {
+      particleType = ParticleType.earth;
+    } else if (spellName.contains('water') || spellName.contains('wave')) {
+      particleType = ParticleType.water;
+    } else if (spellName.contains('light') || spellName.contains('divine')) {
+      particleType = ParticleType.light;
+    } else if (spellName.contains('shadow') || spellName.contains('dark')) {
+      particleType = ParticleType.shadow;
+    } else {
+      particleType = ParticleType.arcane; // Default magical effect
+    }
+    
+    return ParticleSystem(
+      type: particleType,
+      center: Offset(MediaQuery.of(context).size.width * 0.7, MediaQuery.of(context).size.height * 0.6),
+      continuous: true,
+      intensity: 1.5,
+      child: Container(),
     );
   }
 }

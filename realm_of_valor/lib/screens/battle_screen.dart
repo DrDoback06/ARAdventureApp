@@ -7,6 +7,9 @@ import '../widgets/battle_card_widget.dart';
 import '../widgets/player_portrait_widget.dart';
 import '../widgets/battle_log_widget.dart';
 import '../widgets/spell_counter_widget.dart';
+import '../widgets/spell_animation_widget.dart';
+import '../widgets/status_effect_overlay.dart';
+import '../effects/particle_system.dart';
 
 class BattleScreen extends StatefulWidget {
   final Battle battle;
@@ -146,8 +149,35 @@ class _BattleScreenState extends State<BattleScreen>
                         onSkipCounter: () {
                           battleController.spellCounterSystem.forceResolve();
                         },
-                      );
+                                             );
+                     },
+                   ),
+                
+                // Spell Casting Animation Overlay - THE EPIC MAGIC SYSTEM! ✨⚡
+                if (battleController.showSpellAnimation && battleController.currentSpellAnimation != null)
+                  SpellCastingAnimation(
+                    spell: battleController.currentSpellAnimation!,
+                    startPosition: _getPlayerPosition(battleController.spellCasterId ?? '', context),
+                    targetPosition: _getPlayerPosition(battleController.spellTargetId ?? '', context),
+                    animationType: SpellAnimationHelper.getAnimationTypeForSpell(battleController.currentSpellAnimation!),
+                    background: Container(), // Transparent background
+                    onComplete: () {
+                      // Animation completed
                     },
+                  ),
+                
+                // Status Effect Banner Overlay - DRAMATIC STATUS ANNOUNCEMENTS! 🌟
+                if (battleController.showStatusBanner && battleController.currentStatusBanner != null)
+                  Positioned(
+                    top: 100,
+                    left: 0,
+                    right: 0,
+                    child: StatusEffectBanner(
+                      effect: battleController.currentStatusBanner!,
+                      onComplete: () {
+                        // Banner completed
+                      },
+                    ),
                   ),
               ],
             );
@@ -155,6 +185,60 @@ class _BattleScreenState extends State<BattleScreen>
         ),
       ),
     );
+  }
+
+  /// Get approximate player position for animations
+  Offset _getPlayerPosition(String playerId, BuildContext context) {
+    final screenSize = MediaQuery.of(context).size;
+    
+    // Find player index
+    final playerIndex = widget.battle.players.indexWhere((p) => p.id == playerId);
+    if (playerIndex == -1) {
+      return Offset(screenSize.width * 0.5, screenSize.height * 0.5); // Center fallback
+    }
+    
+    final playerCount = widget.battle.players.length;
+    
+    if (playerCount <= 2) {
+      // Two player layout
+      if (playerIndex == 0) {
+        return Offset(screenSize.width * 0.5, screenSize.height * 0.75); // Bottom player
+      } else {
+        return Offset(screenSize.width * 0.5, screenSize.height * 0.25); // Top player
+      }
+    } else if (playerCount <= 4) {
+      // Four player layout
+      switch (playerIndex) {
+        case 0:
+          return Offset(screenSize.width * 0.25, screenSize.height * 0.75); // Bottom left
+        case 1:
+          return Offset(screenSize.width * 0.25, screenSize.height * 0.25); // Top left
+        case 2:
+          return Offset(screenSize.width * 0.75, screenSize.height * 0.25); // Top right
+        case 3:
+          return Offset(screenSize.width * 0.75, screenSize.height * 0.75); // Bottom right
+        default:
+          return Offset(screenSize.width * 0.5, screenSize.height * 0.5);
+      }
+    } else {
+      // Six player layout
+      switch (playerIndex) {
+        case 0:
+          return Offset(screenSize.width * 0.2, screenSize.height * 0.75); // Bottom left
+        case 1:
+          return Offset(screenSize.width * 0.2, screenSize.height * 0.25); // Top left
+        case 2:
+          return Offset(screenSize.width * 0.5, screenSize.height * 0.25); // Top center
+        case 3:
+          return Offset(screenSize.width * 0.8, screenSize.height * 0.25); // Top right
+        case 4:
+          return Offset(screenSize.width * 0.5, screenSize.height * 0.75); // Bottom center
+        case 5:
+          return Offset(screenSize.width * 0.8, screenSize.height * 0.75); // Bottom right
+        default:
+          return Offset(screenSize.width * 0.5, screenSize.height * 0.5);
+      }
+    }
   }
 
   Widget _buildTopStatusBar(BattleController controller) {

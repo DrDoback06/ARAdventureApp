@@ -3,7 +3,11 @@ import 'package:realm_of_valor/models/battle_model.dart';
 import 'package:realm_of_valor/models/card_model.dart';
 import 'package:realm_of_valor/models/character_model.dart';
 import 'package:realm_of_valor/models/spell_counter_system.dart';
+import 'package:realm_of_valor/widgets/spell_animation_widget.dart';
+import 'package:realm_of_valor/widgets/status_effect_overlay.dart';
+import 'package:realm_of_valor/effects/particle_system.dart';
 import 'dart:math' as math;
+import 'dart:async';
 
 enum BattlePhase {
   startTurn,
@@ -28,6 +32,16 @@ class BattleController extends ChangeNotifier {
   // Spell Counter System
   final SpellCounterSystem _spellCounterSystem = SpellCounterSystem();
   bool _waitingForCounters = false;
+  
+  // Spell Animation System
+  ActionCard? _currentSpellAnimation;
+  String? _spellCasterId;
+  String? _spellTargetId;
+  bool _showSpellAnimation = false;
+  
+  // Status Effect System
+  StatusEffect? _currentStatusBanner;
+  bool _showStatusBanner = false;
 
   BattleController(this._battle) {
     _initializeBattle();
@@ -46,6 +60,12 @@ class BattleController extends ChangeNotifier {
   bool get showCardDrawPopup => _showCardDrawPopup;
   SpellCounterSystem get spellCounterSystem => _spellCounterSystem;
   bool get waitingForCounters => _waitingForCounters;
+  ActionCard? get currentSpellAnimation => _currentSpellAnimation;
+  String? get spellCasterId => _spellCasterId;
+  String? get spellTargetId => _spellTargetId;
+  bool get showSpellAnimation => _showSpellAnimation;
+  StatusEffect? get currentStatusBanner => _currentStatusBanner;
+  bool get showStatusBanner => _showStatusBanner;
 
   void _initializeBattle() {
     if (_battle.status == BattleStatus.waiting) {
@@ -209,6 +229,9 @@ class BattleController extends ChangeNotifier {
       return;
     }
     
+    // Trigger spell casting animation
+    _triggerSpellAnimation(card, currentPlayer.id, targetId);
+    
     // Remove card from hand
     final updatedHand = List<ActionCard>.from(currentPlayer.hand);
     updatedHand.remove(card);
@@ -223,6 +246,9 @@ class BattleController extends ChangeNotifier {
     
     // Apply card effect to target
     _applyCardEffectToTarget(card, currentPlayer, target);
+    
+    // Generate status effect from spell if applicable
+    _applyStatusEffectFromSpell(card, target);
     
     _cardPlayedThisTurn = true;
     _selectedCard = null;
@@ -876,6 +902,98 @@ class BattleController extends ChangeNotifier {
     // Debug logging
     if (kDebugMode) {
       print('[BATTLE LOG] $description');
+    }
+  }
+
+  /// Trigger spectacular spell casting animation
+  void _triggerSpellAnimation(ActionCard spell, String casterId, String targetId) {
+    _currentSpellAnimation = spell;
+    _spellCasterId = casterId;
+    _spellTargetId = targetId;
+    _showSpellAnimation = true;
+    
+    notifyListeners();
+    
+    // Auto-hide animation after duration
+    Timer(const Duration(milliseconds: 3000), () {
+      _showSpellAnimation = false;
+      _currentSpellAnimation = null;
+      _spellCasterId = null;
+      _spellTargetId = null;
+      notifyListeners();
+    });
+  }
+
+  /// Apply status effects from spells and show banner
+  void _applyStatusEffectFromSpell(ActionCard spell, BattlePlayer target) {
+    final statusEffect = StatusEffectManager.getEffectForSpell(spell.name);
+    
+    // Add to player's status effects
+    final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+    updatedStatusEffects[statusEffect.name.toLowerCase()] = statusEffect.duration;
+    
+    final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+    _updatePlayer(updatedTarget);
+    
+    // Show status effect banner
+    _showStatusEffectBanner(statusEffect);
+    
+    _addBattleLog('⚡ ${target.name} is affected by ${statusEffect.name}!', 'System');
+  }
+
+  /// Show dramatic status effect banner
+  void _showStatusEffectBanner(StatusEffect effect) {
+    _currentStatusBanner = effect;
+    _showStatusBanner = true;
+    
+    notifyListeners();
+    
+    // Auto-hide banner after 3 seconds
+    Timer(const Duration(milliseconds: 3000), () {
+      _showStatusBanner = false;
+      _currentStatusBanner = null;
+      notifyListeners();
+    });
+  }
+
+  /// Manually trigger particle effects for testing
+  void triggerTestParticleEffect(ParticleType type) {
+    // This could be used for testing or special events
+    notifyListeners();
+  }
+
+  /// Apply healing with visual effects
+  void _applyHealingWithEffects(String playerId, int amount) {
+    _healPlayer(playerId, amount);
+    
+    // Show healing effect
+    _showStatusEffectBanner(StatusEffect.regenerating());
+    
+    final player = getPlayerById(playerId);
+    if (player != null) {
+      _addBattleLog('✨ ${player.name} heals for $amount HP!', 'System');
+    }
+  }
+
+  /// Apply damage with visual effects
+  void _applyDamageWithEffects(String playerId, int amount, {ParticleType? effectType}) {
+    final player = getPlayerById(playerId);
+    if (player == null) return;
+    
+    final newHealth = math.max(0, player.currentHealth - amount);
+    final updatedPlayer = player.copyWith(currentHealth: newHealth);
+    _updatePlayer(updatedPlayer);
+    
+    // Show damage effect
+    if (effectType != null) {
+      // Could trigger specific particle effect here
+    }
+    
+    _addBattleLog('💥 ${player.name} takes $amount damage!', 'System');
+    
+    if (newHealth <= 0) {
+      _addBattleLog('💀 ${player.name} has been defeated!', 'System');
+      _checkBattleEnd();
     }
   }
 
