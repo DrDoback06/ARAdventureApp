@@ -6,6 +6,7 @@ import '../providers/battle_controller.dart';
 import '../widgets/battle_card_widget.dart';
 import '../widgets/player_portrait_widget.dart';
 import '../widgets/battle_log_widget.dart';
+import '../widgets/spell_counter_widget.dart';
 
 class BattleScreen extends StatefulWidget {
   final Battle battle;
@@ -117,6 +118,37 @@ class _BattleScreenState extends State<BattleScreen>
                 // Battle Result Dialog
                 if (battleController.battle.status == BattleStatus.finished)
                   _buildBattleResultDialog(battleController),
+                
+                // Real-Time Spell Counter Overlay - THE EPIC FINALE! ⚡
+                if (battleController.waitingForCounters && battleController.spellCounterSystem.hasActiveInterrupt)
+                  Builder(
+                    builder: (context) {
+                      final currentPlayer = battleController.getCurrentPlayer();
+                      if (currentPlayer == null) return const SizedBox();
+                      
+                      final availableCounters = battleController.spellCounterSystem.getAvailableCounters(currentPlayer.hand);
+                      
+                      return SpellCounterWidget(
+                        spellCounterSystem: battleController.spellCounterSystem,
+                        availableCounters: availableCounters,
+                        onCounterSelected: (counterSpell) {
+                          final success = battleController.attemptSpellCounter(counterSpell);
+                          if (success) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('⚡ ${counterSpell.name} cast as counter!'),
+                                backgroundColor: Colors.green,
+                                duration: const Duration(seconds: 2),
+                              ),
+                            );
+                          }
+                        },
+                        onSkipCounter: () {
+                          battleController.spellCounterSystem.forceResolve();
+                        },
+                      );
+                    },
+                  ),
               ],
             );
           },
@@ -614,7 +646,7 @@ class _BattleScreenState extends State<BattleScreen>
             padding: const EdgeInsets.all(8),
             child: Row(
               children: [
-                controller.currentPhase == BattlePhase.attackPhase && !controller.battle.players.any((p) => p.id == controller.battle.currentPlayerId && (p.currentMana * 0.75).round() > p.currentMana)
+                controller.canAttack()
                     ? Draggable<String>(
                         data: 'ATTACK',
                         feedback: Material(

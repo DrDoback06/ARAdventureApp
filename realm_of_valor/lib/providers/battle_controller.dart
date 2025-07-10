@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:realm_of_valor/models/battle_model.dart';
 import 'package:realm_of_valor/models/card_model.dart';
 import 'package:realm_of_valor/models/character_model.dart';
+import 'package:realm_of_valor/models/spell_counter_system.dart';
 import 'dart:math' as math;
 
 enum BattlePhase {
@@ -23,9 +24,14 @@ class BattleController extends ChangeNotifier {
   bool _cardPlayedThisTurn = false;
   ActionCard? _drawnCard;
   bool _showCardDrawPopup = false;
+  
+  // Spell Counter System
+  final SpellCounterSystem _spellCounterSystem = SpellCounterSystem();
+  bool _waitingForCounters = false;
 
   BattleController(this._battle) {
     _initializeBattle();
+    _setupSpellCounterCallbacks();
   }
 
   // Getters
@@ -38,11 +44,19 @@ class BattleController extends ChangeNotifier {
   bool get showSkills => _showSkills;
   ActionCard? get drawnCard => _drawnCard;
   bool get showCardDrawPopup => _showCardDrawPopup;
+  SpellCounterSystem get spellCounterSystem => _spellCounterSystem;
+  bool get waitingForCounters => _waitingForCounters;
 
   void _initializeBattle() {
     if (_battle.status == BattleStatus.waiting) {
       _startBattle();
     }
+  }
+
+  void _setupSpellCounterCallbacks() {
+    _spellCounterSystem.onSpellResolved = (pendingSpell, counters, effectMultiplier, messages) {
+      _resolveSpellWithCounterResult(pendingSpell, counters, effectMultiplier, messages);
+    };
   }
 
   void _startBattle() {
@@ -189,6 +203,12 @@ class BattleController extends ChangeNotifier {
     final target = getPlayerById(targetId);
     if (currentPlayer == null || target == null) return;
     
+    // Check if this card should trigger an interrupt window
+    if (_shouldTriggerInterrupt(card)) {
+      _startSpellInterrupt(card, currentPlayer.id, targetId);
+      return;
+    }
+    
     // Remove card from hand
     final updatedHand = List<ActionCard>.from(currentPlayer.hand);
     updatedHand.remove(card);
@@ -214,6 +234,100 @@ class BattleController extends ChangeNotifier {
     if (card.effect.contains('also_attack')) {
       _addBattleLog('${card.name} grants an additional attack!', currentPlayer.name);
     }
+    
+    notifyListeners();
+  }
+
+  /// Check if a card should trigger the interrupt window
+  bool _shouldTriggerInterrupt(ActionCard card) {
+    // Trigger interrupt for powerful spells and certain card types
+    if (card.cost >= 4) return true; // High-cost cards are interruptible
+    if (card.type == ActionCardType.special) return true;
+    if (card.effect.contains('damage') && card.effect.contains('all')) return true; // Area damage
+    if (card.effect.contains('double_damage')) return true;
+    if (card.name.toLowerCase().contains('fire') || 
+        card.name.toLowerCase().contains('lightning') ||
+        card.name.toLowerCase().contains('ice') ||
+        card.name.toLowerCase().contains('shadow')) return true;
+    
+    return false;
+  }
+
+  /// Start the spell interrupt window
+  void _startSpellInterrupt(ActionCard spell, String casterId, String targetId) {
+    _waitingForCounters = true;
+    _spellCounterSystem.startInterruptWindow(spell, casterId, targetId);
+    
+    _addBattleLog('⚡ ${spell.name} is being cast! Opponents have 8 seconds to counter!', getCurrentPlayer()?.name ?? 'Unknown');
+    
+    notifyListeners();
+  }
+
+  /// Attempt to counter the current spell
+  bool attemptSpellCounter(ActionCard counterSpell) {
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    
+    if (!canPlayCard(counterSpell)) return false;
+    
+    final success = _spellCounterSystem.attemptCounter(counterSpell, currentPlayer.id);
+    if (success) {
+      // Remove counter spell from hand and deduct mana
+      final updatedHand = List<ActionCard>.from(currentPlayer.hand);
+      updatedHand.remove(counterSpell);
+      
+      final updatedPlayer = currentPlayer.copyWith(
+        hand: updatedHand,
+        currentMana: math.max(0, currentPlayer.currentMana - counterSpell.cost),
+      );
+      
+      _updatePlayer(updatedPlayer);
+      _addBattleLog('⚡ ${currentPlayer.name} attempts to counter with ${counterSpell.name}!', currentPlayer.name);
+      
+      notifyListeners();
+    }
+    
+    return success;
+  }
+
+  /// Resolve spell after interrupt window ends
+  void _resolveSpellWithCounterResult(PendingSpell pendingSpell, List<CounterSpellAttempt> counters, double effectMultiplier, List<String> messages) {
+    _waitingForCounters = false;
+    
+    final caster = getPlayerById(pendingSpell.casterId);
+    final target = getPlayerById(pendingSpell.targetId);
+    
+    if (caster == null || target == null) return;
+    
+    // Remove original spell from caster's hand if not already done
+    final updatedHand = List<ActionCard>.from(caster.hand);
+    if (updatedHand.contains(pendingSpell.spell)) {
+      updatedHand.remove(pendingSpell.spell);
+      
+      final updatedCaster = caster.copyWith(
+        hand: updatedHand,
+        currentMana: math.max(0, caster.currentMana - pendingSpell.spell.cost),
+      );
+      
+      _updatePlayer(updatedCaster);
+    }
+    
+    // Log counter resolution messages
+    for (final message in messages) {
+      _addBattleLog('⚡ $message', 'System');
+    }
+    
+    if (effectMultiplier > 0.0) {
+      // Apply modified spell effect
+      _addBattleLog('⚡ ${pendingSpell.spell.name} resolves with ${(effectMultiplier * 100).round()}% effectiveness!', 'System');
+      _applyCardEffectToTargetWithMultiplier(pendingSpell.spell, caster, target, effectMultiplier);
+    } else {
+      _addBattleLog('⚡ ${pendingSpell.spell.name} is completely nullified!', 'System');
+    }
+    
+    _cardPlayedThisTurn = true;
+    _selectedCard = null;
+    _selectedTargetId = null;
     
     notifyListeners();
   }
@@ -282,6 +396,47 @@ class BattleController extends ChangeNotifier {
         case 'gain_1_extra_attack':
           _addBattleLog('${target.name} gains an extra attack this turn!', caster.name);
           // TODO: Apply extra attack status effect
+          break;
+      }
+    }
+  }
+
+  void _applyCardEffectToTargetWithMultiplier(ActionCard card, BattlePlayer caster, BattlePlayer target, double multiplier) {
+    final effects = card.effect.split(',');
+    
+    for (final effect in effects) {
+      final parts = effect.trim().split(':');
+      final effectType = parts[0];
+      final effectValue = parts.length > 1 ? parts[1] : '';
+      
+      switch (effectType) {
+        case 'damage_bonus':
+          final bonus = ((int.tryParse(effectValue) ?? 0) * multiplier).round();
+          _addBattleLog('${target.name} gains +$bonus attack damage!', caster.name);
+          // TODO: Apply damage bonus status effect
+          break;
+          
+        case 'double_damage':
+          if (multiplier > 0.5) {
+            _addBattleLog('${target.name}\'s next attack will deal ${multiplier > 1.0 ? 'amplified' : 'reduced'} double damage!', caster.name);
+          }
+          // TODO: Apply double damage status effect with multiplier
+          break;
+          
+        case 'heal':
+          final healAmount = ((int.tryParse(effectValue) ?? 0) * multiplier).round();
+          _healPlayer(target.id, healAmount);
+          break;
+          
+        case 'mana_bonus':
+          final manaBonus = ((int.tryParse(effectValue) ?? 0) * multiplier).round();
+          _restoreMana(target.id, manaBonus);
+          break;
+          
+        // Add more effect types as needed
+        default:
+          // Fall back to normal effect application
+          _applyCardEffectToTarget(card, caster, target);
           break;
       }
     }
@@ -726,6 +881,7 @@ class BattleController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _spellCounterSystem.dispose();
     super.dispose();
   }
 }

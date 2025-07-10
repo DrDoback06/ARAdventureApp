@@ -75,92 +75,195 @@ class BattleTestUtils {
     );
   }
   
-  /// Creates a balanced action deck for testing
+  /// Creates a balanced action deck for testing (Enhanced with Elemental Spell Counter System!)
   static List<ActionCard> _createTestActionDeck() {
     return [
-      // Physical Cards
+      // ⚡ LIGHTNING SPELLS - Can be countered by Earth magic
+      ActionCard(
+        name: 'Lightning Bolt',
+        description: 'Strike with pure lightning energy',
+        type: ActionCardType.spell,
+        effect: 'damage:25',
+        cost: 4,
+        rarity: CardRarity.uncommon,
+      ),
+      ActionCard(
+        name: 'Thunder Storm',
+        description: 'Area lightning damage to all enemies',
+        type: ActionCardType.special,
+        effect: 'damage:18,all_enemies',
+        cost: 6,
+        rarity: CardRarity.epic,
+      ),
+      ActionCard(
+        name: 'Lightning Shock',
+        description: 'Quick lightning strike',
+        type: ActionCardType.spell,
+        effect: 'damage:15,shock',
+        cost: 3,
+        rarity: CardRarity.common,
+      ),
+      
+      // 🔥 FIRE SPELLS - Can be countered by Water/Ice magic
+      ActionCard(
+        name: 'Fireball',
+        description: 'Launch a burning projectile',
+        type: ActionCardType.spell,
+        effect: 'damage:30,burn:5',
+        cost: 5,
+        rarity: CardRarity.rare,
+      ),
+      ActionCard(
+        name: 'Flame Burst',
+        description: 'Explosive fire damage',
+        type: ActionCardType.spell,
+        effect: 'damage:22',
+        cost: 4,
+        rarity: CardRarity.uncommon,
+      ),
+      ActionCard(
+        name: 'Fire Wave',
+        description: 'Burning wave of destruction',
+        type: ActionCardType.special,
+        effect: 'damage:16,burn:3,all_enemies',
+        cost: 7,
+        rarity: CardRarity.epic,
+      ),
+      
+      // ❄️ ICE/WATER COUNTERS - Can counter Fire spells perfectly
+      ActionCard(
+        name: 'Ice Shield',
+        description: 'Freeze incoming fire attacks',
+        type: ActionCardType.support,
+        effect: 'ice_barrier:50',
+        cost: 3,
+        rarity: CardRarity.rare,
+      ),
+      ActionCard(
+        name: 'Water Wave',
+        description: 'Extinguish fire and heal allies',
+        type: ActionCardType.spell,
+        effect: 'heal:25,extinguish',
+        cost: 4,
+        rarity: CardRarity.uncommon,
+      ),
+      ActionCard(
+        name: 'Frost Armor',
+        description: 'Ice protection that counters fire',
+        type: ActionCardType.support,
+        effect: 'frost_shield:40,fire_immunity:2',
+        cost: 5,
+        rarity: CardRarity.rare,
+      ),
+      
+      // 🌍 EARTH COUNTERS - Can ground Lightning perfectly
+      ActionCard(
+        name: 'Earth Wall',
+        description: 'Ground electrical attacks',
+        type: ActionCardType.support,
+        effect: 'earth_shield:40',
+        cost: 3,
+        rarity: CardRarity.common,
+      ),
+      ActionCard(
+        name: 'Stone Skin',
+        description: 'Become one with the earth',
+        type: ActionCardType.support,
+        effect: 'lightning_immunity:3',
+        cost: 4,
+        rarity: CardRarity.uncommon,
+      ),
+      
+      // ✨ ARCANE - Universal spell counters
+      ActionCard(
+        name: 'Arcane Dispel',
+        description: 'Cancel any magical effect',
+        type: ActionCardType.special,
+        effect: 'dispel,cancel_action',
+        cost: 3,
+        rarity: CardRarity.rare,
+      ),
+      ActionCard(
+        name: 'Magic Nullify',
+        description: 'Completely negate next spell',
+        type: ActionCardType.counter,
+        effect: 'magic_immunity:1',
+        cost: 4,
+        rarity: CardRarity.epic,
+      ),
+      
+      // ☀️ LIGHT SPELLS - Counter Shadow, vulnerable to Shadow
+      ActionCard(
+        name: 'Divine Light',
+        description: 'Banish shadow magic',
+        type: ActionCardType.spell,
+        effect: 'holy_damage:35',
+        cost: 5,
+        rarity: CardRarity.epic,
+      ),
+      ActionCard(
+        name: 'Holy Beam',
+        description: 'Pierce through darkness',
+        type: ActionCardType.spell,
+        effect: 'light_damage:28',
+        cost: 4,
+        rarity: CardRarity.rare,
+      ),
+      
+      // 🌑 SHADOW SPELLS - Counter Light, vulnerable to Light
+      ActionCard(
+        name: 'Shadow Curse',
+        description: 'Dark magic corruption',
+        type: ActionCardType.spell,
+        effect: 'curse:15,damage:20',
+        cost: 4,
+        rarity: CardRarity.rare,
+      ),
+      ActionCard(
+        name: 'Dark Bolt',
+        description: 'Projectile of pure darkness',
+        type: ActionCardType.spell,
+        effect: 'shadow_damage:25',
+        cost: 4,
+        rarity: CardRarity.uncommon,
+      ),
+      
+      // 💨 AIR SPELLS - Counter Earth magic
+      ActionCard(
+        name: 'Wind Gust',
+        description: 'Scatter earth magic',
+        type: ActionCardType.spell,
+        effect: 'air_damage:20,dispel_earth',
+        cost: 3,
+        rarity: CardRarity.common,
+      ),
+      
+      // 🌿 NATURE SPELLS - Healing and growth
+      ActionCard(
+        name: 'Nature\'s Blessing',
+        description: 'Restore health with natural magic',
+        type: ActionCardType.heal,
+        effect: 'heal:30,nature_boost',
+        cost: 4,
+        rarity: CardRarity.uncommon,
+      ),
+      
+      // 💪 PHYSICAL CARDS - Non-magical, can't be countered by spell counters
       ActionCard(
         name: 'Power Strike',
-        description: 'Deal +10 damage this turn',
-        type: ActionCardType.damage,
-        effect: 'damage_bonus:10',
-        cost: 2,
-      ),
-      ActionCard(
-        name: 'Push-up Power',
-        description: 'Do 3 push-ups for +15 damage',
+        description: 'Physical attack that ignores spell counters',
         type: ActionCardType.physical,
-        effect: 'damage_bonus:15',
+        effect: 'damage_bonus:20',
         cost: 3,
-        physicalRequirement: 'push_ups:3',
-      ),
-      
-      // Buff Cards
-      ActionCard(
-        name: 'Double Strike',
-        description: 'Deal double damage this turn',
-        type: ActionCardType.buff,
-        effect: 'double_damage',
-        cost: 4,
+        rarity: CardRarity.common,
       ),
       ActionCard(
-        name: 'Mana Surge',
-        description: 'Gain 5 extra mana',
-        type: ActionCardType.buff,
-        effect: 'mana_bonus:5',
-        cost: 1,
-      ),
-      
-      // Healing Cards
-      ActionCard(
-        name: 'Healing Potion',
-        description: 'Restore 25 health',
-        type: ActionCardType.heal,
-        effect: 'heal:25',
-        cost: 3,
-      ),
-      ActionCard(
-        name: 'Minor Heal',
-        description: 'Restore 15 health',
-        type: ActionCardType.heal,
-        effect: 'heal:15',
+        name: 'Shield Bash',
+        description: 'Pure physical impact',
+        type: ActionCardType.physical,
+        effect: 'damage:18,stun',
         cost: 2,
-      ),
-      
-      // Debuff Cards
-      ActionCard(
-        name: 'Weakness',
-        description: 'Enemy deals half damage next turn',
-        type: ActionCardType.debuff,
-        effect: 'half_damage',
-        cost: 3,
-      ),
-      
-      // Counter Cards
-      ActionCard(
-        name: 'Counter Attack',
-        description: 'Counter the next attack',
-        type: ActionCardType.counter,
-        effect: 'counter_next',
-        cost: 2,
-      ),
-      
-      // Special Cards
-      ActionCard(
-        name: 'Disrupt',
-        description: 'Force opponent to discard a random card',
-        type: ActionCardType.special,
-        effect: 'discard_random_opponent_card',
-        cost: 4,
-      ),
-      
-      // Skip Cards (chaotic)
-      ActionCard(
-        name: 'Stumble',
-        description: 'Miss your next turn',
-        type: ActionCardType.skip,
-        effect: 'skip_turn',
-        cost: 0,
+        rarity: CardRarity.common,
       ),
     ];
   }
