@@ -3,8 +3,9 @@ import 'package:realm_of_valor/models/battle_model.dart';
 import 'package:realm_of_valor/models/card_model.dart';
 import 'package:realm_of_valor/models/character_model.dart';
 import '../models/spell_counter_system.dart';
-import '../widgets/spell_animation_widget.dart';
-import '../widgets/status_effect_overlay.dart';
+// Removed widget imports to fix compilation issues
+// import '../widgets/spell_animation_widget.dart';
+// import '../widgets/status_effect_overlay.dart';
 import '../effects/particle_system.dart';
 import 'dart:math' as math;
 import 'dart:async';
@@ -39,8 +40,7 @@ class BattleController extends ChangeNotifier {
   String? _spellTargetId;
   bool _showSpellAnimation = false;
   
-  // Status Effect System
-  StatusEffect? _currentStatusBanner;
+  // Status Effect System - simplified
   bool _showStatusBanner = false;
   
   // Drag Arrow System
@@ -72,7 +72,6 @@ class BattleController extends ChangeNotifier {
   String? get spellCasterId => _spellCasterId;
   String? get spellTargetId => _spellTargetId;
   bool get showSpellAnimation => _showSpellAnimation;
-  StatusEffect? get currentStatusBanner => _currentStatusBanner;
   bool get showStatusBanner => _showStatusBanner;
   
   // Drag Arrow Getters
@@ -1010,61 +1009,48 @@ class BattleController extends ChangeNotifier {
 
   /// Apply status effects from spells and show banner
   void _applyStatusEffectFromSpell(ActionCard spell, BattlePlayer target) {
-    final statusEffect = _getStatusEffectForSpell(spell.name);
+    final effectName = _getSimpleStatusEffectName(spell.name);
     
     // Add to player's status effects
     final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
-    updatedStatusEffects[statusEffect.type.name.toLowerCase()] = statusEffect.duration;
+    updatedStatusEffects[effectName] = 3; // Default duration
     
     final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
     _updatePlayer(updatedTarget);
     
-    // Show status effect banner
-    _showStatusEffectBanner(statusEffect);
-    
-    _addBattleLog('⚡ ${target.name} is affected by ${statusEffect.type.name}!', 'System');
+    _addBattleLog('⚡ ${target.name} is affected by $effectName!', 'System');
   }
   
-  /// Get status effect for spell name
-  StatusEffect _getStatusEffectForSpell(String spellName) {
+  /// Get simple status effect name for spell
+  String _getSimpleStatusEffectName(String spellName) {
     final name = spellName.toLowerCase();
     
     if (name.contains('fire') || name.contains('burn') || name.contains('flame')) {
-      return StatusEffect.burning();
+      return 'burning';
     } else if (name.contains('ice') || name.contains('frost') || name.contains('freeze')) {
-      return StatusEffect.frozen();
+      return 'frozen';
     } else if (name.contains('lightning') || name.contains('shock') || name.contains('thunder')) {
-      return StatusEffect.shocked();
+      return 'shocked';
     } else if (name.contains('heal') || name.contains('regenerate') || name.contains('cure')) {
-      return StatusEffect.regenerating();
+      return 'regenerating';
     } else if (name.contains('shield') || name.contains('protect') || name.contains('barrier')) {
-      return StatusEffect.shielded();
+      return 'shielded';
     } else if (name.contains('bless') || name.contains('divine') || name.contains('holy')) {
-      return StatusEffect.blessed();
+      return 'blessed';
     } else if (name.contains('curse') || name.contains('weaken') || name.contains('debuff')) {
-      return StatusEffect.weakened();
+      return 'weakened';
     } else if (name.contains('silence') || name.contains('mute') || name.contains('quiet')) {
-      return StatusEffect.silenced();
+      return 'silenced';
     } else if (name.contains('strength') || name.contains('power') || name.contains('might')) {
-      return StatusEffect.strengthened();
+      return 'strengthened';
     } else {
-      return StatusEffect.blessed(); // Default effect
+      return 'blessed'; // Default effect
     }
   }
 
-  /// Show dramatic status effect banner
-  void _showStatusEffectBanner(StatusEffect effect) {
-    _currentStatusBanner = effect;
-    _showStatusBanner = true;
-    
-    notifyListeners();
-    
-    // Auto-hide banner after 3 seconds
-    Timer(const Duration(milliseconds: 3000), () {
-      _showStatusBanner = false;
-      _currentStatusBanner = null;
-      notifyListeners();
-    });
+  /// Show status effect message
+  void _showStatusEffectMessage(String effectName) {
+    _addBattleLog('✨ Status effect: $effectName', 'System');
   }
 
   /// Manually trigger particle effects for testing
@@ -1164,9 +1150,6 @@ class BattleController extends ChangeNotifier {
   /// Apply healing with visual effects
   void _applyHealingWithEffects(String playerId, int amount) {
     _healPlayer(playerId, amount);
-    
-    // Show healing effect
-    _showStatusEffectBanner(StatusEffect.regenerating());
     
     final player = getPlayerById(playerId);
     if (player != null) {

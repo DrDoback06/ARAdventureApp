@@ -76,8 +76,13 @@ class _BattleScreenState extends State<BattleScreen>
                 ),
                 
                 // EPIC PARTICLE SYSTEM LAYER! ⚡🔥✨
-                const IgnorePointer(
-                  child: BattleParticleSystem(),
+                IgnorePointer(
+                  child: ParticleSystem(
+                    type: ParticleType.energy,
+                    center: const Offset(400, 300),
+                    intensity: 0.5,
+                    continuous: true,
+                  ),
                 ),
                 
                 // FORCE LOAD - Particle Test (will be visible when new code loads)
@@ -184,65 +189,72 @@ class _BattleScreenState extends State<BattleScreen>
                   ),
                 
                 // Spell Casting Animation Overlay - THE EPIC MAGIC SYSTEM! ✨⚡
-                SpellAnimationWidget(
-                  battleController: battleController,
-                ),
+                // SpellAnimationWidget(
+                //   battleController: battleController,
+                // ),
                 
                 // Status Effect Overlays for All Players - DRAMATIC PARTICLE EFFECTS! 🌟⚡
-                ...battleController.battle.players.map((player) {
-                  final statusEffects = _convertPlayerStatusEffects(player);
-                  if (statusEffects.isEmpty) return const SizedBox.shrink();
-                  
-                  return Positioned(
-                    left: _getPlayerPosition(player.id, context).dx - 100,
-                    top: _getPlayerPosition(player.id, context).dy - 100,
-                    child: IgnorePointer(
-                      child: StatusEffectOverlay(
-                        statusEffects: statusEffects,
-                        size: 200.0,
-                      ),
-                    ),
-                  );
-                }).toList(),
+                // ...battleController.battle.players.map((player) {
+                //   final statusEffects = _convertPlayerStatusEffects(player);
+                //   if (statusEffects.isEmpty) return const SizedBox.shrink();
+                //   
+                //   return Positioned(
+                //     left: _getPlayerPosition(player.id, context).dx - 100,
+                //     top: _getPlayerPosition(player.id, context).dy - 100,
+                //     child: IgnorePointer(
+                //       child: StatusEffectOverlay(
+                //         statusEffects: statusEffects,
+                //         size: 200.0,
+                //       ),
+                //     ),
+                //   );
+                // }).toList(),
                 
                 // EPIC DRAG ARROW SYSTEM! 🏹⚡
-                if (battleController.isDragging)
-                  IgnorePointer(
-                    child: DragArrowWidget(
-                      startPosition: battleController.dragStartPosition,
-                      currentPosition: battleController.dragCurrentPosition,
-                      draggedCard: battleController.draggedCard,
-                      draggedAction: battleController.draggedAction,
-                      hoveredTargetId: battleController.hoveredTargetId,
-                      isValidTarget: battleController.hoveredTargetId != null &&
-                          battleController.isValidDragTarget(battleController.hoveredTargetId!),
-                    ),
-                  ),
+                // if (battleController.isDragging)
+                //   IgnorePointer(
+                //     child: DragArrowWidget(
+                //       startPosition: battleController.dragStartPosition,
+                //       currentPosition: battleController.dragCurrentPosition,
+                //       draggedCard: battleController.draggedCard,
+                //       draggedAction: battleController.draggedAction,
+                //       hoveredTargetId: battleController.hoveredTargetId,
+                //       isValidTarget: battleController.hoveredTargetId != null &&
+                //           battleController.isValidDragTarget(battleController.hoveredTargetId!),
+                //     ),
+                //   ),
                 
                 // DEBUG: Test if enhanced features are loading
-                const Positioned(
+                Positioned(
                   top: 50,
                   right: 50,
-                  child: SimpleTestWidget(),
+                  child: Container(
+                    width: 150,
+                    height: 50,
+                    color: Colors.red,
+                    child: const Center(
+                      child: Text(
+                        'CODE UPDATED!',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
                 ),
                 
                 // DEBUG: Force drag test button
                 Positioned(
-                  top: 200,
+                  top: 120,
                   right: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      // Force trigger drag state for testing
-                      battleController.startAttackDrag(const Offset(100, 100));
-                      battleController.setHoveredTarget(battleController.battle.players.length > 1 
-                          ? battleController.battle.players[1].id 
-                          : battleController.battle.players[0].id);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.orange,
-                      foregroundColor: Colors.white,
+                  child: Container(
+                    width: 100,
+                    height: 40,
+                    color: Colors.orange,
+                    child: const Center(
+                      child: Text(
+                        'DRAG TEST',
+                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
                     ),
-                    child: const Text('TEST DRAG'),
                   ),
                 ),
               ],
@@ -266,63 +278,64 @@ class _BattleScreenState extends State<BattleScreen>
   }
 
   /// Convert player status effects to enhanced status effects for particle system
-  List<StatusEffect> _convertPlayerStatusEffects(BattlePlayer player) {
-    final effects = <StatusEffect>[];
-    
-    for (final entry in player.statusEffects.entries) {
-      final effectName = entry.key.toLowerCase();
-      final duration = entry.value;
-      
-      switch (effectName) {
-        case 'burn':
-        case 'burning':
-          effects.add(StatusEffect.burning(duration: duration));
-          break;
-        case 'freeze':
-        case 'frozen':
-          effects.add(StatusEffect.frozen(duration: duration));
-          break;
-        case 'shock':
-        case 'shocked':
-          effects.add(StatusEffect.shocked(duration: duration));
-          break;
-        case 'strength':
-        case 'strengthened':
-          effects.add(StatusEffect.strengthened(duration: duration));
-          break;
-        case 'shield':
-        case 'shielded':
-          effects.add(StatusEffect.shielded(duration: duration));
-          break;
-        case 'regenerating':
-        case 'heal':
-          effects.add(StatusEffect.regenerating(duration: duration));
-          break;
-        case 'weakened':
-        case 'weak':
-          effects.add(StatusEffect.weakened(duration: duration));
-          break;
-        case 'silenced':
-        case 'silence':
-          effects.add(StatusEffect.silenced(duration: duration));
-          break;
-        case 'blessed':
-        case 'blessing':
-          effects.add(StatusEffect.blessed(duration: duration));
-          break;
-        default:
-          // Create a generic effect for unknown status effects
-          effects.add(StatusEffect(
-            type: StatusEffectType.blessed,
-            duration: duration,
-            intensity: 1.0,
-          ));
-          break;
-      }
-    }
-    
-    return effects;
-  }
+  // Temporarily commented out to fix compilation issues
+  // List<StatusEffect> _convertPlayerStatusEffects(BattlePlayer player) {
+  //   final effects = <StatusEffect>[];
+  //   
+  //   for (final entry in player.statusEffects.entries) {
+  //     final effectName = entry.key.toLowerCase();
+  //     final duration = entry.value;
+  //     
+  //     switch (effectName) {
+  //       case 'burn':
+  //       case 'burning':
+  //         effects.add(StatusEffect.burning(duration: duration));
+  //         break;
+  //       case 'freeze':
+  //       case 'frozen':
+  //         effects.add(StatusEffect.frozen(duration: duration));
+  //         break;
+  //       case 'shock':
+  //       case 'shocked':
+  //         effects.add(StatusEffect.shocked(duration: duration));
+  //         break;
+  //       case 'strength':
+  //       case 'strengthened':
+  //         effects.add(StatusEffect.strengthened(duration: duration));
+  //         break;
+  //       case 'shield':
+  //       case 'shielded':
+  //         effects.add(StatusEffect.shielded(duration: duration));
+  //         break;
+  //       case 'regenerating':
+  //       case 'heal':
+  //         effects.add(StatusEffect.regenerating(duration: duration));
+  //         break;
+  //       case 'weakened':
+  //       case 'weak':
+  //         effects.add(StatusEffect.weakened(duration: duration));
+  //         break;
+  //       case 'silenced':
+  //       case 'silence':
+  //         effects.add(StatusEffect.silenced(duration: duration));
+  //         break;
+  //       case 'blessed':
+  //       case 'blessing':
+  //         effects.add(StatusEffect.blessed(duration: duration));
+  //         break;
+  //       default:
+  //         // Create a generic effect for unknown status effects
+  //         effects.add(StatusEffect(
+  //           type: StatusEffectType.blessed,
+  //           duration: duration,
+  //           intensity: 1.0,
+  //         ));
+  //         break;
+  //     }
+  //   }
+  //   
+  //   return effects;
+  // }
 
   /// Get approximate player position for animations
   Offset _getPlayerPosition(String playerId, BuildContext context) {
