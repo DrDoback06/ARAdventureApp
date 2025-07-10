@@ -1,8 +1,15 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:realm_of_valor/models/battle_model.dart';
 import 'package:realm_of_valor/models/card_model.dart';
 import 'package:realm_of_valor/models/character_model.dart';
+import '../models/spell_counter_system.dart';
+// Removed widget imports to fix compilation issues
+// import '../widgets/spell_animation_widget.dart';
+// import '../widgets/status_effect_overlay.dart';
+import '../effects/particle_system.dart';
 import 'dart:math' as math;
+import 'dart:async';
 
 enum BattlePhase {
   startTurn,
@@ -21,9 +28,33 @@ class BattleController extends ChangeNotifier {
   bool _showSkills = false;
   bool _attackUsed = false;
   bool _cardPlayedThisTurn = false;
+  ActionCard? _drawnCard;
+  bool _showCardDrawPopup = false;
+  
+  // Spell Counter System
+  final SpellCounterSystem _spellCounterSystem = SpellCounterSystem();
+  bool _waitingForCounters = false;
+  
+  // Spell Animation System
+  ActionCard? _currentSpellAnimation;
+  String? _spellCasterId;
+  String? _spellTargetId;
+  bool _showSpellAnimation = false;
+  
+  // Status Effect System - simplified
+  bool _showStatusBanner = false;
+  
+  // Drag Arrow System
+  Offset? _dragStartPosition;
+  Offset? _dragCurrentPosition;
+  ActionCard? _draggedCard;
+  String? _draggedAction;
+  String? _hoveredTargetId;
+  bool _isDragging = false;
 
   BattleController(this._battle) {
     _initializeBattle();
+    _setupSpellCounterCallbacks();
   }
 
   // Getters
@@ -34,11 +65,37 @@ class BattleController extends ChangeNotifier {
   bool get showPhaseIndicator => _showPhaseIndicator;
   bool get showInventory => _showInventory;
   bool get showSkills => _showSkills;
+  ActionCard? get drawnCard => _drawnCard;
+  bool get showCardDrawPopup => _showCardDrawPopup;
+  SpellCounterSystem get spellCounterSystem => _spellCounterSystem;
+  bool get waitingForCounters => _waitingForCounters;
+  ActionCard? get currentSpellAnimation => _currentSpellAnimation;
+  String? get spellCasterId => _spellCasterId;
+  String? get spellTargetId => _spellTargetId;
+  bool get showSpellAnimation => _showSpellAnimation;
+  bool get showStatusBanner => _showStatusBanner;
+  
+  // Drag Arrow Getters
+  Offset? get dragStartPosition => _dragStartPosition;
+  Offset? get dragCurrentPosition => _dragCurrentPosition;
+  ActionCard? get draggedCard => _draggedCard;
+  String? get draggedAction => _draggedAction;
+  String? get hoveredTargetId => _hoveredTargetId;
+  bool get isDragging => _isDragging;
+  
+  // Additional getters for enhanced functionality
+  List<BattlePlayer> get allPlayers => _battle.players;
 
   void _initializeBattle() {
     if (_battle.status == BattleStatus.waiting) {
       _startBattle();
     }
+  }
+
+  void _setupSpellCounterCallbacks() {
+    _spellCounterSystem.onSpellResolved = (pendingSpell, counters, effectMultiplier, messages) {
+      _resolveSpellWithCounterResult(pendingSpell, counters, effectMultiplier, messages);
+    };
   }
 
   void _startBattle() {
@@ -54,6 +111,12 @@ class BattleController extends ChangeNotifier {
     
     _addBattleLog('Battle Started!', 'System');
     _showPhaseIndicatorWithDelay();
+    
+    // Start the first player's turn immediately
+    Future.delayed(const Duration(milliseconds: 1000), () {
+      startTurn();
+    });
+    
     notifyListeners();
   }
 
@@ -68,10 +131,13 @@ class BattleController extends ChangeNotifier {
   }
 
   BattlePlayer? getCurrentPlayer() {
-    return _battle.players.firstWhere(
-      (player) => player.id == _battle.currentPlayerId,
-      orElse: () => _battle.players.first,
-    );
+    try {
+      return _battle.players.firstWhere(
+        (player) => player.id == _battle.currentPlayerId,
+      );
+    } catch (e) {
+      return _battle.players.isNotEmpty ? _battle.players.first : null;
+    }
   }
 
   BattlePlayer? getPlayerById(String playerId) {
@@ -82,6 +148,27 @@ class BattleController extends ChangeNotifier {
     }
   }
 
+  /// Determines team based on player index (even = team A, odd = team B)
+  int getPlayerTeam(String playerId) {
+    final playerIndex = _battle.players.indexWhere((p) => p.id == playerId);
+    return playerIndex % 2; // 0 = Team A, 1 = Team B
+  }
+
+  /// Gets team members for a given team
+  List<BattlePlayer> getTeamMembers(int team) {
+    return _battle.players.where((player) {
+      final index = _battle.players.indexOf(player);
+      return index % 2 == team;
+    }).toList();
+  }
+
+  /// Check if player is on friendly team relative to current player
+  bool isFriendly(String playerId) {
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    return getPlayerTeam(playerId) == getPlayerTeam(currentPlayer.id);
+  }
+
   // Card Management
   void selectCard(ActionCard card) {
     if (_currentPhase != BattlePhase.playPhase || _cardPlayedThisTurn) {
@@ -89,7 +176,8 @@ class BattleController extends ChangeNotifier {
       return;
     }
     
-    if (_selectedCard == card) {
+    // FIXED: Properly toggle card selection and prevent double-play
+    if (_selectedCard?.id == card.id) {
       _selectedCard = null;
     } else {
       _selectedCard = card;
@@ -99,6 +187,12 @@ class BattleController extends ChangeNotifier {
 
   void selectTarget(String targetId) {
     _selectedTargetId = targetId;
+    
+    // If we have a selected card and target, play the card automatically
+    if (_selectedCard != null && _selectedTargetId != null) {
+      playCardOnTarget(_selectedCard!, _selectedTargetId!);
+    }
+    
     notifyListeners();
   }
 
@@ -125,6 +219,8 @@ class BattleController extends ChangeNotifier {
   }
 
   void playCard(ActionCard card) {
+    // For now, keep the old method for non-targeted cards
+    // Most cards should use playCardOnTarget instead
     if (!canPlayCard(card)) {
       _addBattleLog('Cannot play ${card.name}', getCurrentPlayer()?.name ?? 'Unknown');
       return;
@@ -132,6 +228,29 @@ class BattleController extends ChangeNotifier {
     
     final currentPlayer = getCurrentPlayer();
     if (currentPlayer == null) return;
+    
+    // Apply to self by default
+    playCardOnTarget(card, currentPlayer.id);
+  }
+
+  void playCardOnTarget(ActionCard card, String targetId) {
+    if (!canPlayCard(card)) {
+      _addBattleLog('Cannot play ${card.name}', getCurrentPlayer()?.name ?? 'Unknown');
+      return;
+    }
+    
+    final currentPlayer = getCurrentPlayer();
+    final target = getPlayerById(targetId);
+    if (currentPlayer == null || target == null) return;
+    
+    // Check if this card should trigger an interrupt window
+    if (_shouldTriggerInterrupt(card)) {
+      _startSpellInterrupt(card, currentPlayer.id, targetId);
+      return;
+    }
+    
+    // Trigger spell casting animation
+    _triggerSpellAnimation(card, currentPlayer.id, targetId);
     
     // Remove card from hand
     final updatedHand = List<ActionCard>.from(currentPlayer.hand);
@@ -145,13 +264,17 @@ class BattleController extends ChangeNotifier {
     
     _updatePlayer(updatedPlayer);
     
-    // Apply card effect
-    _applyCardEffect(card, currentPlayer);
+    // Apply card effect to target
+    _applyCardEffectToTarget(card, currentPlayer, target);
+    
+    // Generate status effect from spell if applicable
+    _applyStatusEffectFromSpell(card, target);
     
     _cardPlayedThisTurn = true;
     _selectedCard = null;
+    _selectedTargetId = null;
     
-    _addBattleLog('${currentPlayer.name} played ${card.name}', currentPlayer.name);
+    _addBattleLog('${currentPlayer.name} played ${card.name} on ${target.name}', currentPlayer.name);
     
     // Check if card allows additional actions
     if (card.effect.contains('also_attack')) {
@@ -161,7 +284,129 @@ class BattleController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Check if a card should trigger the interrupt window
+  bool _shouldTriggerInterrupt(ActionCard card) {
+    // Trigger interrupt for powerful spells and certain card types
+    if (card.cost >= 4) return true; // High-cost cards are interruptible
+    if (card.type == ActionCardType.special) return true;
+    if (card.effect.contains('damage') && card.effect.contains('all')) return true; // Area damage
+    if (card.effect.contains('double_damage')) return true;
+    if (card.name.toLowerCase().contains('fire') || 
+        card.name.toLowerCase().contains('lightning') ||
+        card.name.toLowerCase().contains('ice') ||
+        card.name.toLowerCase().contains('shadow')) return true;
+    
+    return false;
+  }
+
+  /// Start the spell interrupt window
+  void _startSpellInterrupt(ActionCard spell, String casterId, String targetId) {
+    _waitingForCounters = true;
+    _spellCounterSystem.startInterruptWindow(spell, casterId, targetId);
+    
+    _addBattleLog('⚡ ${spell.name} is being cast! Opponents have 8 seconds to counter!', getCurrentPlayer()?.name ?? 'Unknown');
+    
+    notifyListeners();
+  }
+
+  /// Attempt to counter the current spell
+  bool attemptSpellCounter(ActionCard counterSpell) {
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    
+    if (!canPlayCard(counterSpell)) return false;
+    
+    final success = _spellCounterSystem.attemptCounter(counterSpell, currentPlayer.id);
+    if (success) {
+      // Remove counter spell from hand and deduct mana
+      final updatedHand = List<ActionCard>.from(currentPlayer.hand);
+      updatedHand.remove(counterSpell);
+      
+      final updatedPlayer = currentPlayer.copyWith(
+        hand: updatedHand,
+        currentMana: math.max(0, currentPlayer.currentMana - counterSpell.cost),
+      );
+      
+      _updatePlayer(updatedPlayer);
+      _addBattleLog('⚡ ${currentPlayer.name} attempts to counter with ${counterSpell.name}!', currentPlayer.name);
+      
+      notifyListeners();
+    }
+    
+    return success;
+  }
+
+  /// Resolve spell after interrupt window ends
+  void _resolveSpellWithCounterResult(PendingSpell pendingSpell, List<CounterSpellAttempt> counters, double effectMultiplier, List<String> messages) {
+    _waitingForCounters = false;
+    
+    final caster = getPlayerById(pendingSpell.casterId);
+    final target = getPlayerById(pendingSpell.targetId);
+    
+    if (caster == null || target == null) return;
+    
+    // Remove original spell from caster's hand if not already done
+    final updatedHand = List<ActionCard>.from(caster.hand);
+    if (updatedHand.contains(pendingSpell.spell)) {
+      updatedHand.remove(pendingSpell.spell);
+      
+      final updatedCaster = caster.copyWith(
+        hand: updatedHand,
+        currentMana: math.max(0, caster.currentMana - pendingSpell.spell.cost),
+      );
+      
+      _updatePlayer(updatedCaster);
+    }
+    
+    // Log counter resolution messages
+    for (final message in messages) {
+      _addBattleLog('⚡ $message', 'System');
+    }
+    
+    if (effectMultiplier > 0.0) {
+      // Apply modified spell effect
+      _addBattleLog('⚡ ${pendingSpell.spell.name} resolves with ${(effectMultiplier * 100).round()}% effectiveness!', 'System');
+      _applyCardEffectToTargetWithMultiplier(pendingSpell.spell, caster, target, effectMultiplier);
+    } else {
+      _addBattleLog('⚡ ${pendingSpell.spell.name} is completely nullified!', 'System');
+    }
+    
+    _cardPlayedThisTurn = true;
+    _selectedCard = null;
+    _selectedTargetId = null;
+    
+    notifyListeners();
+  }
+
   void _applyCardEffect(ActionCard card, BattlePlayer player) {
+    // Redirect to target-based system
+    _applyCardEffectToTarget(card, player, player);
+  }
+
+  void _applyCardEffectToTarget(ActionCard card, BattlePlayer caster, BattlePlayer target) {
+    // Handle cards with no specific effects but have damage type
+    if (card.effect.isEmpty && card.type == ActionCardType.damage) {
+      // Default damage based on cost
+      final damageAmount = math.max(1, card.cost * 2);
+      final newHealth = math.max(0, target.currentHealth - damageAmount);
+      final updatedTarget = target.copyWith(currentHealth: newHealth);
+      _updatePlayer(updatedTarget);
+      _addBattleLog('${caster.name} casts ${card.name} dealing $damageAmount damage to ${target.name}!', caster.name);
+      
+      if (newHealth <= 0) {
+        _addBattleLog('${target.name} has been defeated!', 'System');
+        _checkBattleEnd();
+      }
+      return;
+    }
+    
+    // Handle cards with no specific effects but have heal type
+    if (card.effect.isEmpty && card.type == ActionCardType.heal) {
+      final healAmount = math.max(1, card.cost * 3);
+      _healPlayer(target.id, healAmount);
+      return;
+    }
+    
     final effects = card.effect.split(',');
     
     for (final effect in effects) {
@@ -172,45 +417,130 @@ class BattleController extends ChangeNotifier {
       switch (effectType) {
         case 'damage_bonus':
           final bonus = int.tryParse(effectValue) ?? 0;
-          _addBattleLog('${player.name} gains +$bonus attack damage!', player.name);
+          _addBattleLog('${target.name} gains +$bonus attack damage!', caster.name);
+          // Apply temporary damage bonus
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['damage_bonus'] = 3; // Lasts 3 turns
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
           break;
           
         case 'double_damage':
-          _addBattleLog('${player.name}\'s next attack will deal double damage!', player.name);
+          _addBattleLog('${target.name}\'s next attack will deal double damage!', caster.name);
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['double_damage'] = 1; // Next attack only
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
           break;
           
         case 'half_damage':
-          _addBattleLog('${player.name}\'s next attack will deal half damage!', player.name);
+          _addBattleLog('${target.name}\'s next attack will deal half damage!', caster.name);
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['weakened'] = 2; // Lasts 2 turns
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
           break;
           
         case 'skip_turn':
-          _addBattleLog('${player.name} must skip their next turn!', player.name);
+          _addBattleLog('${target.name} must skip their next turn!', caster.name);
+          // TODO: Apply skip turn status effect
           break;
           
         case 'counter_next':
-          _addBattleLog('${player.name} prepares to counter the next attack!', player.name);
+          _addBattleLog('${target.name} prepares to counter the next attack!', caster.name);
+          // TODO: Apply counter status effect
           break;
           
         case 'cancel_action':
-          _addBattleLog('${player.name} cancels the opponent\'s action!', player.name);
+          _addBattleLog('${caster.name} cancels ${target.name}\'s action!', caster.name);
+          // TODO: Implement action cancellation
           break;
           
         case 'heal':
           final healAmount = int.tryParse(effectValue) ?? 0;
-          _healPlayer(player.id, healAmount);
+          _healPlayer(target.id, healAmount);
           break;
           
         case 'mana_bonus':
           final manaBonus = int.tryParse(effectValue) ?? 0;
-          _restoreMana(player.id, manaBonus);
+          _restoreMana(target.id, manaBonus);
           break;
           
         case 'discard_random_opponent_card':
-          _discardRandomOpponentCard(player.id);
+          if (!isFriendly(target.id)) {
+            _discardRandomCard(target.id);
+          }
           break;
           
         case 'gain_1_extra_attack':
-          _addBattleLog('${player.name} gains an extra attack this turn!', player.name);
+          _addBattleLog('${target.name} gains an extra attack this turn!', caster.name);
+          final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+          updatedStatusEffects['extra_attack'] = 1; // This turn only
+          final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+          _updatePlayer(updatedTarget);
+          break;
+          
+        case 'damage':
+          final damageAmount = int.tryParse(effectValue) ?? 0;
+          if (damageAmount > 0) {
+            _applyDamageWithEffects(target.id, damageAmount, effectType: ParticleType.fire);
+          }
+          break;
+          
+        case 'direct_damage':
+          final damageAmount = int.tryParse(effectValue) ?? 0;
+          if (damageAmount > 0) {
+            final newHealth = math.max(0, target.currentHealth - damageAmount);
+            final updatedTarget = target.copyWith(currentHealth: newHealth);
+            _updatePlayer(updatedTarget);
+            _addBattleLog('${caster.name}\'s spell deals $damageAmount damage to ${target.name}! (${target.currentHealth} → $newHealth HP)', caster.name);
+            
+            if (newHealth <= 0) {
+              _addBattleLog('${target.name} has been defeated!', 'System');
+              _checkBattleEnd();
+            }
+          }
+          break;
+      }
+    }
+  }
+
+  void _applyCardEffectToTargetWithMultiplier(ActionCard card, BattlePlayer caster, BattlePlayer target, double multiplier) {
+    final effects = card.effect.split(',');
+    
+    for (final effect in effects) {
+      final parts = effect.trim().split(':');
+      final effectType = parts[0];
+      final effectValue = parts.length > 1 ? parts[1] : '';
+      
+      switch (effectType) {
+        case 'damage_bonus':
+          final bonus = ((int.tryParse(effectValue) ?? 0) * multiplier).round();
+          _addBattleLog('${target.name} gains +$bonus attack damage!', caster.name);
+          // TODO: Apply damage bonus status effect
+          break;
+          
+        case 'double_damage':
+          if (multiplier > 0.5) {
+            _addBattleLog('${target.name}\'s next attack will deal ${multiplier > 1.0 ? 'amplified' : 'reduced'} double damage!', caster.name);
+          }
+          // TODO: Apply double damage status effect with multiplier
+          break;
+          
+        case 'heal':
+          final healAmount = ((int.tryParse(effectValue) ?? 0) * multiplier).round();
+          _healPlayer(target.id, healAmount);
+          break;
+          
+        case 'mana_bonus':
+          final manaBonus = ((int.tryParse(effectValue) ?? 0) * multiplier).round();
+          _restoreMana(target.id, manaBonus);
+          break;
+          
+        // Add more effect types as needed
+        default:
+          // Fall back to normal effect application
+          _applyCardEffectToTarget(card, caster, target);
           break;
       }
     }
@@ -238,33 +568,37 @@ class BattleController extends ChangeNotifier {
     _addBattleLog('${player.name} restores $amount MP (${player.currentMana} → $newMana)', player.name);
   }
 
-  void _discardRandomOpponentCard(String playerId) {
-    final opponents = _battle.players.where((p) => p.id != playerId).toList();
-    if (opponents.isEmpty) return;
+  void _discardRandomCard(String playerId) {
+    final player = getPlayerById(playerId);
+    if (player == null || player.hand.isEmpty) return;
     
     final random = math.Random();
-    final opponent = opponents[random.nextInt(opponents.length)];
+    final cardToDiscard = player.hand[random.nextInt(player.hand.length)];
+    final updatedHand = List<ActionCard>.from(player.hand);
+    updatedHand.remove(cardToDiscard);
     
-    if (opponent.hand.isNotEmpty) {
-      final cardToDiscard = opponent.hand[random.nextInt(opponent.hand.length)];
-      final updatedHand = List<ActionCard>.from(opponent.hand);
-      updatedHand.remove(cardToDiscard);
-      
-      final updatedOpponent = opponent.copyWith(hand: updatedHand);
-      _updatePlayer(updatedOpponent);
-      
-      _addBattleLog('${opponent.name} discards ${cardToDiscard.name}', opponent.name);
-    }
+    final updatedPlayer = player.copyWith(hand: updatedHand);
+    _updatePlayer(updatedPlayer);
+    
+    _addBattleLog('${player.name} discards ${cardToDiscard.name}', player.name);
   }
 
-  // Attack System
+  // Attack System with REASONABLE COSTS
   bool canAttack() {
-    if (_currentPhase != BattlePhase.attackPhase) return false;
+    // FIXED: Allow attacks in both play and attack phases
+    if (_currentPhase != BattlePhase.playPhase && _currentPhase != BattlePhase.attackPhase) return false;
     if (_attackUsed) return false;
     if (_selectedTargetId == null) return false;
     
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    
+    // FIXED: Reasonable attack cost (30% of max mana instead of 75%)
+    final attackCost = (currentPlayer.maxMana * 0.3).round();
+    if (currentPlayer.currentMana < attackCost) return false;
+    
     final target = getPlayerById(_selectedTargetId!);
-    return target != null && target.id != getCurrentPlayer()?.id;
+    return target != null;
   }
 
   void performAttack() {
@@ -274,6 +608,15 @@ class BattleController extends ChangeNotifier {
     final target = getPlayerById(_selectedTargetId!);
     
     if (attacker == null || target == null) return;
+    
+    // Calculate attack cost (30% of max mana)
+    final attackCost = (attacker.maxMana * 0.3).round();
+    
+    // Deduct mana for attack
+    final updatedAttacker = attacker.copyWith(
+      currentMana: math.max(0, attacker.currentMana - attackCost),
+    );
+    _updatePlayer(updatedAttacker);
     
     // Calculate damage
     int baseDamage = attacker.character.attackRating;
@@ -289,11 +632,12 @@ class BattleController extends ChangeNotifier {
     _updatePlayer(updatedTarget);
     
     _addBattleLog(
-      '${attacker.name} attacks ${target.name} for $finalDamage damage! (${target.currentHealth} → $newHealth HP)',
+      '${attacker.name} attacks ${target.name} for $finalDamage damage! (${target.currentHealth} → $newHealth HP) [-$attackCost MP]',
       attacker.name,
     );
     
     _attackUsed = true;
+    _selectedTargetId = null;
     
     // Check if target is defeated
     if (newHealth <= 0) {
@@ -375,7 +719,7 @@ class BattleController extends ChangeNotifier {
     }
   }
 
-  // Turn Management
+  // Turn Management with TEAM ALTERNATION
   void startTurn() {
     _currentPhase = BattlePhase.startTurn;
     _attackUsed = false;
@@ -385,11 +729,16 @@ class BattleController extends ChangeNotifier {
     
     final currentPlayer = getCurrentPlayer();
     if (currentPlayer != null) {
-      // Draw a card at the start of turn
-      _drawCards(currentPlayer.id, 1);
+      // FIXED: Skip card draw popup for first turn to prevent UI blocking
+      if (_battle.currentTurn > 1) {
+        _drawCardWithPopup(currentPlayer.id);
+      } else {
+        // For first turn, just draw directly to hand
+        _drawCards(currentPlayer.id, 1);
+      }
       
-      // Restore some mana
-      final manaRestore = math.min(2, currentPlayer.maxMana - currentPlayer.currentMana);
+      // Restore some mana (50% of max mana per turn for faster gameplay)
+      final manaRestore = (currentPlayer.maxMana * 0.5).round();
       if (manaRestore > 0) {
         _restoreMana(currentPlayer.id, manaRestore);
       }
@@ -397,10 +746,72 @@ class BattleController extends ChangeNotifier {
       _addBattleLog('${currentPlayer.name}\'s turn begins!', currentPlayer.name);
     }
     
-    // Move to play phase
+    // FIXED: Immediately move to play phase so player can act
     _currentPhase = BattlePhase.playPhase;
     _showPhaseIndicatorWithDelay();
     notifyListeners();
+  }
+
+  void _drawCardWithPopup(String playerId) {
+    final player = getPlayerById(playerId);
+    if (player == null) return;
+    
+    final availableCards = List<ActionCard>.from(player.actionDeck);
+    if (availableCards.isNotEmpty) {
+      final random = math.Random();
+      final cardIndex = random.nextInt(availableCards.length);
+      final drawnCard = availableCards[cardIndex];
+      
+      _drawnCard = drawnCard;
+      _showCardDrawPopup = true;
+      notifyListeners();
+    }
+  }
+
+  void acceptDrawnCard() {
+    final currentPlayer = getCurrentPlayer();
+    final drawnCard = _drawnCard;
+    
+    if (currentPlayer == null || drawnCard == null) return;
+    
+    final updatedHand = List<ActionCard>.from(currentPlayer.hand);
+    
+    if (updatedHand.length >= 10) {
+      // Hand is full - need to choose which card to discard
+      _showHandOverflowDialog();
+      return;
+    }
+    
+    updatedHand.add(drawnCard);
+    final updatedPlayer = currentPlayer.copyWith(hand: updatedHand);
+    _updatePlayer(updatedPlayer);
+    
+    _addBattleLog('${currentPlayer.name} adds ${drawnCard.name} to hand.', currentPlayer.name);
+    
+    _dismissCardDrawPopup();
+  }
+
+  void discardDrawnCard() {
+    final currentPlayer = getCurrentPlayer();
+    final drawnCard = _drawnCard;
+    
+    if (currentPlayer == null || drawnCard == null) return;
+    
+    _addBattleLog('${currentPlayer.name} discards ${drawnCard.name}.', currentPlayer.name);
+    
+    _dismissCardDrawPopup();
+  }
+
+  void _dismissCardDrawPopup() {
+    _drawnCard = null;
+    _showCardDrawPopup = false;
+    notifyListeners();
+  }
+
+  void _showHandOverflowDialog() {
+    // This will be handled in the UI layer
+    // For now, auto-discard the drawn card
+    discardDrawnCard();
   }
 
   void moveToAttackPhase() {
@@ -425,8 +836,8 @@ class BattleController extends ChangeNotifier {
       _addBattleLog('${currentPlayer.name}\'s turn ends.', currentPlayer.name);
     }
     
-    // Move to next player
-    _moveToNextPlayer();
+    // Move to next player using TEAM ALTERNATION
+    _moveToNextPlayerTeamBased();
     
     // Start next turn
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -436,54 +847,61 @@ class BattleController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void _moveToNextPlayer() {
+  void _moveToNextPlayerTeamBased() {
     final currentPlayerIndex = _battle.players.indexWhere((p) => p.id == _battle.currentPlayerId);
     if (currentPlayerIndex == -1) return;
     
-    // Find next alive player
-    int nextIndex = (currentPlayerIndex + 1) % _battle.players.length;
-    while (_battle.players[nextIndex].currentHealth <= 0 && nextIndex != currentPlayerIndex) {
-      nextIndex = (nextIndex + 1) % _battle.players.length;
-    }
+    final currentTeam = getPlayerTeam(_battle.currentPlayerId);
+    final opposingTeam = currentTeam == 0 ? 1 : 0;
     
-    _battle = _battle.copyWith(
-      currentPlayerId: _battle.players[nextIndex].id,
-      currentTurn: _battle.currentTurn + 1,
-    );
-  }
-
-  void _drawCards(String playerId, int count) {
-    final player = getPlayerById(playerId);
-    if (player == null) return;
+    // Get alive players from opposing team
+    final opposingTeamPlayers = getTeamMembers(opposingTeam).where((p) => p.currentHealth > 0).toList();
     
-    final updatedHand = List<ActionCard>.from(player.hand);
-    final availableCards = List<ActionCard>.from(player.actionDeck);
-    
-    for (int i = 0; i < count && availableCards.isNotEmpty && updatedHand.length < 10; i++) {
-      final random = math.Random();
-      final cardIndex = random.nextInt(availableCards.length);
-      final drawnCard = availableCards[cardIndex];
+    if (opposingTeamPlayers.isNotEmpty) {
+      // Find next player in opposing team
+      // Use round-robin within the team
+      final currentOpposingIndex = opposingTeamPlayers.indexWhere((p) => 
+          _battle.players.indexOf(p) > currentPlayerIndex);
       
-      updatedHand.add(drawnCard);
-      // Note: In a real game, you'd remove from deck, but for testing we keep it available
-    }
-    
-    final updatedPlayer = player.copyWith(hand: updatedHand);
-    _updatePlayer(updatedPlayer);
-    
-    if (count == 1) {
-      _addBattleLog('${player.name} draws a card.', player.name);
+      if (currentOpposingIndex != -1) {
+        // Found a player in opposing team after current player
+        _battle = _battle.copyWith(
+          currentPlayerId: opposingTeamPlayers[currentOpposingIndex].id,
+          currentTurn: _battle.currentTurn + 1,
+        );
+      } else {
+        // No player found after current, take first alive opposing team player
+        _battle = _battle.copyWith(
+          currentPlayerId: opposingTeamPlayers.first.id,
+          currentTurn: _battle.currentTurn + 1,
+        );
+      }
     } else {
-      _addBattleLog('${player.name} draws $count cards.', player.name);
+      // No alive players in opposing team, continue with current team
+      final currentTeamPlayers = getTeamMembers(currentTeam).where((p) => p.currentHealth > 0).toList();
+      if (currentTeamPlayers.isNotEmpty) {
+        final nextInTeam = currentTeamPlayers.firstWhere(
+          (p) => _battle.players.indexOf(p) > currentPlayerIndex,
+          orElse: () => currentTeamPlayers.first,
+        );
+        
+        _battle = _battle.copyWith(
+          currentPlayerId: nextInTeam.id,
+          currentTurn: _battle.currentTurn + 1,
+        );
+      }
     }
   }
 
   // Battle Management
   void _checkBattleEnd() {
-    final alivePlayers = _battle.players.where((p) => p.currentHealth > 0).toList();
+    final team0Players = getTeamMembers(0).where((p) => p.currentHealth > 0).toList();
+    final team1Players = getTeamMembers(1).where((p) => p.currentHealth > 0).toList();
     
-    if (alivePlayers.length <= 1) {
-      final winner = alivePlayers.isNotEmpty ? alivePlayers.first : null;
+    if (team0Players.isEmpty || team1Players.isEmpty) {
+      final winningTeam = team0Players.isNotEmpty ? 0 : 1;
+      final winningPlayers = winningTeam == 0 ? team0Players : team1Players;
+      final winner = winningPlayers.isNotEmpty ? winningPlayers.first : null;
       
       _battle = _battle.copyWith(
         status: BattleStatus.finished,
@@ -492,7 +910,7 @@ class BattleController extends ChangeNotifier {
       );
       
       if (winner != null) {
-        _addBattleLog('${winner.name} is victorious!', 'System');
+        _addBattleLog('Team ${winningTeam + 1} is victorious!', 'System');
       } else {
         _addBattleLog('Battle ended in a draw!', 'System');
       }
@@ -571,8 +989,207 @@ class BattleController extends ChangeNotifier {
     }
   }
 
+  /// Trigger spectacular spell casting animation
+  void _triggerSpellAnimation(ActionCard spell, String casterId, String targetId) {
+    _currentSpellAnimation = spell;
+    _spellCasterId = casterId;
+    _spellTargetId = targetId;
+    _showSpellAnimation = true;
+    
+    notifyListeners();
+    
+    // Auto-hide animation after duration
+    Timer(const Duration(milliseconds: 3000), () {
+      _showSpellAnimation = false;
+      _currentSpellAnimation = null;
+      _spellCasterId = null;
+      _spellTargetId = null;
+      notifyListeners();
+    });
+  }
+
+  /// Apply status effects from spells and show banner
+  void _applyStatusEffectFromSpell(ActionCard spell, BattlePlayer target) {
+    final effectName = _getSimpleStatusEffectName(spell.name);
+    
+    // Add to player's status effects
+    final updatedStatusEffects = Map<String, int>.from(target.statusEffects);
+    updatedStatusEffects[effectName] = 3; // Default duration
+    
+    final updatedTarget = target.copyWith(statusEffects: updatedStatusEffects);
+    _updatePlayer(updatedTarget);
+    
+    _addBattleLog('⚡ ${target.name} is affected by $effectName!', 'System');
+  }
+  
+  /// Get simple status effect name for spell
+  String _getSimpleStatusEffectName(String spellName) {
+    final name = spellName.toLowerCase();
+    
+    if (name.contains('fire') || name.contains('burn') || name.contains('flame')) {
+      return 'burning';
+    } else if (name.contains('ice') || name.contains('frost') || name.contains('freeze')) {
+      return 'frozen';
+    } else if (name.contains('lightning') || name.contains('shock') || name.contains('thunder')) {
+      return 'shocked';
+    } else if (name.contains('heal') || name.contains('regenerate') || name.contains('cure')) {
+      return 'regenerating';
+    } else if (name.contains('shield') || name.contains('protect') || name.contains('barrier')) {
+      return 'shielded';
+    } else if (name.contains('bless') || name.contains('divine') || name.contains('holy')) {
+      return 'blessed';
+    } else if (name.contains('curse') || name.contains('weaken') || name.contains('debuff')) {
+      return 'weakened';
+    } else if (name.contains('silence') || name.contains('mute') || name.contains('quiet')) {
+      return 'silenced';
+    } else if (name.contains('strength') || name.contains('power') || name.contains('might')) {
+      return 'strengthened';
+    } else {
+      return 'blessed'; // Default effect
+    }
+  }
+
+  /// Show status effect message
+  void _showStatusEffectMessage(String effectName) {
+    _addBattleLog('✨ Status effect: $effectName', 'System');
+  }
+
+  /// Manually trigger particle effects for testing
+  void triggerTestParticleEffect(ParticleType type) {
+    // This could be used for testing or special events
+    notifyListeners();
+  }
+  
+  // Drag Arrow Management
+  /// Start dragging a card
+  void startCardDrag(ActionCard card, Offset startPosition) {
+    _draggedCard = card;
+    _draggedAction = null;
+    _dragStartPosition = startPosition;
+    _dragCurrentPosition = startPosition;
+    _isDragging = true;
+    notifyListeners();
+  }
+  
+  /// Start dragging an attack action
+  void startAttackDrag(Offset startPosition) {
+    _draggedCard = null;
+    _draggedAction = 'ATTACK';
+    _dragStartPosition = startPosition;
+    _dragCurrentPosition = startPosition;
+    _isDragging = true;
+    notifyListeners();
+  }
+  
+  /// Update drag position
+  void updateDragPosition(Offset currentPosition) {
+    _dragCurrentPosition = currentPosition;
+    notifyListeners();
+  }
+  
+  /// Set hovered target during drag
+  void setHoveredTarget(String? targetId) {
+    if (_hoveredTargetId != targetId) {
+      _hoveredTargetId = targetId;
+      notifyListeners();
+    }
+  }
+  
+  /// End drag operation
+  void endDrag() {
+    _draggedCard = null;
+    _draggedAction = null;
+    _dragStartPosition = null;
+    _dragCurrentPosition = null;
+    _hoveredTargetId = null;
+    _isDragging = false;
+    notifyListeners();
+  }
+  
+  /// Check if a target is valid for the current drag operation
+  bool isValidDragTarget(String targetId) {
+    if (!_isDragging) return false;
+    
+    final target = getPlayerById(targetId);
+    if (target == null || target.currentHealth <= 0) return false;
+    
+    final currentPlayer = getCurrentPlayer();
+    if (currentPlayer == null) return false;
+    
+    // Attack targeting rules
+    if (_draggedAction == 'ATTACK') {
+      // Can attack enemies
+      return !isFriendly(targetId);
+    }
+    
+    // Card targeting rules
+    if (_draggedCard != null) {
+      switch (_draggedCard!.type) {
+        case ActionCardType.heal:
+        case ActionCardType.buff:
+          // Healing and buffs can target allies (including self)
+          return true; // Allow targeting anyone for strategic play
+          
+        case ActionCardType.damage:
+        case ActionCardType.debuff:
+          // Damage and debuffs can target enemies
+          return !isFriendly(targetId);
+          
+        case ActionCardType.special:
+        case ActionCardType.counter:
+          // Special cards can target anyone
+          return true;
+          
+        default:
+          return true;
+      }
+    }
+    
+    return false;
+  }
+
+  /// Apply healing with visual effects
+  void _applyHealingWithEffects(String playerId, int amount) {
+    _healPlayer(playerId, amount);
+    
+    final player = getPlayerById(playerId);
+    if (player != null) {
+      _addBattleLog('✨ ${player.name} heals for $amount HP!', 'System');
+    }
+  }
+
+  /// Apply damage with visual effects
+  void _applyDamageWithEffects(String playerId, int amount, {ParticleType? effectType}) {
+    final player = getPlayerById(playerId);
+    if (player == null) return;
+    
+    final newHealth = math.max(0, player.currentHealth - amount);
+    final updatedPlayer = player.copyWith(currentHealth: newHealth);
+    _updatePlayer(updatedPlayer);
+    
+    // Show damage effect
+    if (effectType != null) {
+      // Could trigger specific particle effect here
+    }
+    
+    _addBattleLog('💥 ${player.name} takes $amount damage!', 'System');
+    
+    if (newHealth <= 0) {
+      _addBattleLog('💀 ${player.name} has been defeated!', 'System');
+      _checkBattleEnd();
+    }
+  }
+
   @override
   void dispose() {
+    // Safely dispose of resources
+    try {
+      // Note: SpellCounterSystem doesn't extend ChangeNotifier anymore, so no dispose needed
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error disposing battle controller: $e');
+      }
+    }
     super.dispose();
   }
 }

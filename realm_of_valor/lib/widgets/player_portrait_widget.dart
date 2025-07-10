@@ -1,12 +1,30 @@
 import 'package:flutter/material.dart';
 import '../models/battle_model.dart';
+<<<<<<< HEAD
 import '../models/card_model.dart';
+=======
+import '../models/character_model.dart';
+import 'status_effect_overlay.dart';
+import 'target_highlight_widget.dart';
+import '../effects/particle_system.dart';
+import 'dart:math' as math;
+>>>>>>> 50b85f912312c6fcf5474ed3ba6ab3f972f1d531
 
 class PlayerPortraitWidget extends StatelessWidget {
   final BattlePlayer player;
   final bool isActive;
   final bool isOpponent;
   final VoidCallback? onTap;
+  final Function(ActionCard, String)? onCardDropped;
+  final Function(String)? onAttackDropped;
+  
+  // Drag Arrow Enhancement Properties
+  final bool isValidDragTarget;
+  final bool isHovered;
+  final ActionCard? draggedCard;
+  final String? draggedAction;
+  final Function(String)? onDragEnter;
+  final Function(String)? onDragLeave;
 
   const PlayerPortraitWidget({
     Key? key,
@@ -14,42 +32,104 @@ class PlayerPortraitWidget extends StatelessWidget {
     required this.isActive,
     required this.isOpponent,
     this.onTap,
+    this.onCardDropped,
+    this.onAttackDropped,
+    this.isValidDragTarget = false,
+    this.isHovered = false,
+    this.draggedCard,
+    this.draggedAction,
+    this.onDragEnter,
+    this.onDragLeave,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
     final isDead = player.currentHealth <= 0;
+    final statusEffects = _generateStatusEffectsFromPlayer();
     
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
+    return TargetHighlightWidget(
+      isValidTarget: isValidDragTarget,
+      isHovered: isHovered,
+      draggedCard: draggedCard,
+      draggedAction: draggedAction,
+      playerId: player.id,
+      child: StatusEffectOverlay(
+        statusEffects: statusEffects,
+        size: 120.0,
+        child: DragTarget<String>(
+          onAccept: (attack) {
+            if (attack == 'ATTACK' && onAttackDropped != null) {
+              onAttackDropped!(player.id);
+            }
+          },
+          onWillAccept: (attack) => attack == 'ATTACK' && !isDead,
+          onMove: (details) {
+            if (onDragEnter != null && !isHovered) {
+              onDragEnter!(player.id);
+            }
+          },
+          onLeave: (data) {
+            if (onDragLeave != null) {
+              onDragLeave!(player.id);
+            }
+          },
+          builder: (context, attackCandidates, attackRejected) {
+            return DragTarget<ActionCard>(
+              onAccept: (card) {
+                if (onCardDropped != null) {
+                  onCardDropped!(card, player.id);
+                }
+              },
+              onWillAccept: (card) => card != null && !isDead,
+              onMove: (details) {
+                if (onDragEnter != null && !isHovered) {
+                  onDragEnter!(player.id);
+                }
+              },
+              onLeave: (data) {
+                if (onDragLeave != null) {
+                  onDragLeave!(player.id);
+                }
+              },
+              builder: (context, cardCandidates, cardRejected) {
+                final isHighlighted = cardCandidates.isNotEmpty || attackCandidates.isNotEmpty || isHovered;
+        
+        return GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         margin: const EdgeInsets.all(4),
-        decoration: BoxDecoration(
-          color: isDead 
-              ? Colors.grey.withOpacity(0.3)
-              : (isActive 
-                  ? const Color(0xFFe94560).withOpacity(0.8)
-                  : const Color(0xFF16213e)),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
+                  decoration: BoxDecoration(
             color: isDead 
-                ? Colors.grey
-                : (isActive 
-                    ? Colors.white 
-                    : const Color(0xFFe94560)),
-            width: isActive ? 3 : 2,
+                ? Colors.grey.withOpacity(0.3)
+                : (isHighlighted
+                    ? Colors.yellow.withOpacity(0.8)
+                    : (isActive 
+                        ? const Color(0xFFe94560).withOpacity(0.8)
+                        : const Color(0xFF16213e))),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isDead 
+                  ? Colors.grey
+                  : (isHighlighted
+                      ? Colors.yellow
+                      : (isActive 
+                          ? Colors.white 
+                          : const Color(0xFFe94560))),
+              width: isHighlighted ? 4 : (isActive ? 3 : 2),
+            ),
+            boxShadow: (isActive || isHighlighted)
+                ? [
+                    BoxShadow(
+                      color: isHighlighted 
+                          ? Colors.yellow.withOpacity(0.7)
+                          : const Color(0xFFe94560).withOpacity(0.5),
+                      blurRadius: 10,
+                      spreadRadius: 2,
+                    ),
+                  ]
+                : null,
           ),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFe94560).withOpacity(0.5),
-                    blurRadius: 10,
-                    spreadRadius: 2,
-                  ),
-                ]
-              : null,
-        ),
         child: Stack(
           children: [
             Padding(
@@ -137,8 +217,13 @@ class PlayerPortraitWidget extends StatelessWidget {
                     children: [
                       _buildStatDisplay(
                         'ATK',
+<<<<<<< HEAD
                         player.character.attackRating,
                         Icons.local_fire_department,
+=======
+                        player.character.attack,
+                        Icons.sports_martial_arts,
+>>>>>>> 50b85f912312c6fcf5474ed3ba6ab3f972f1d531
                         isDead ? Colors.grey : Colors.orange,
                         isDead,
                       ),
@@ -231,6 +316,10 @@ class PlayerPortraitWidget extends StatelessWidget {
               ),
           ],
         ),
+      );
+            },
+          );
+        },
       ),
     );
   }
@@ -410,5 +499,115 @@ class PlayerPortraitWidget extends StatelessWidget {
       default:
         return Icons.help;
     }
+  }
+
+  /// Generate enhanced status effects with particle animations
+  List<StatusEffect> _generateStatusEffectsFromPlayer() {
+    final effects = <StatusEffect>[];
+    
+    // Convert player status effects to enhanced status effects
+    for (final entry in player.statusEffects.entries) {
+      final effectName = entry.key.toLowerCase();
+      final duration = entry.value;
+      
+      switch (effectName) {
+        case 'burn':
+        case 'burning':
+          effects.add(StatusEffect.burning(duration: duration));
+          break;
+        case 'freeze':
+        case 'frozen':
+          effects.add(StatusEffect.frozen(duration: duration));
+          break;
+        case 'shock':
+        case 'shocked':
+          effects.add(StatusEffect.shocked(duration: duration));
+          break;
+        case 'strength':
+        case 'strengthened':
+          effects.add(StatusEffect.strengthened(duration: duration));
+          break;
+        case 'shield':
+        case 'shielded':
+          effects.add(StatusEffect.shielded(duration: duration));
+          break;
+        case 'regenerating':
+        case 'heal':
+          effects.add(StatusEffect.regenerating(duration: duration));
+          break;
+        case 'weakened':
+        case 'weak':
+          effects.add(StatusEffect.weakened(duration: duration));
+          break;
+        case 'silenced':
+        case 'silence':
+          effects.add(StatusEffect.silenced(duration: duration));
+          break;
+        case 'blessed':
+        case 'blessing':
+          effects.add(StatusEffect.blessed(duration: duration));
+          break;
+        default:
+          // Create a generic effect for unknown status effects
+          effects.add(StatusEffect(
+            type: StatusEffectType.strengthened,
+            name: effectName.toUpperCase(),
+            description: 'Unknown effect',
+            duration: duration,
+            primaryColor: Colors.grey,
+            secondaryColor: Colors.blueGrey,
+            icon: Icons.help,
+            isPositive: true,
+          ));
+      }
+    }
+    
+    // Add dynamic effects based on player state
+    if (player.currentHealth < player.maxHealth * 0.3) {
+      // Player is critically wounded - add visual effect
+      effects.add(StatusEffect(
+        type: StatusEffectType.weakened,
+        name: 'Critical',
+        description: 'Critically wounded',
+        duration: 1,
+        primaryColor: Colors.red,
+        secondaryColor: Colors.orange,
+        icon: Icons.warning,
+        isPositive: false,
+        intensity: 1.5,
+      ));
+    }
+    
+    if (player.currentMana >= player.maxMana * 0.8) {
+      // Player has high mana - add magical aura
+      effects.add(StatusEffect(
+        type: StatusEffectType.magicPowered,
+        name: 'Energized',
+        description: 'High magical energy',
+        duration: 1,
+        primaryColor: Colors.blue,
+        secondaryColor: Colors.cyan,
+        icon: Icons.auto_awesome,
+        isPositive: true,
+        intensity: 0.8,
+      ));
+    }
+    
+    if (isActive) {
+      // Add active turn effect
+      effects.add(StatusEffect(
+        type: StatusEffectType.hastened,
+        name: 'Active',
+        description: 'Currently taking turn',
+        duration: 1,
+        primaryColor: Colors.yellow,
+        secondaryColor: Colors.orange,
+        icon: Icons.play_arrow,
+        isPositive: true,
+        intensity: 1.2,
+      ));
+    }
+    
+    return effects;
   }
 }

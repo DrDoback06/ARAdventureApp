@@ -99,9 +99,10 @@ class BattleCardWidget extends StatelessWidget {
           children: [
             // Main Card Content
             Padding(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   // Header with cost and type icon
                   Row(
@@ -109,16 +110,16 @@ class BattleCardWidget extends StatelessWidget {
                     children: [
                       // Mana Cost
                       Container(
-                        padding: const EdgeInsets.all(4),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
                         decoration: BoxDecoration(
                           color: Colors.blue,
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
                           '${card.cost}',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 10,
+                            fontSize: 9,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -128,56 +129,56 @@ class BattleCardWidget extends StatelessWidget {
                       Icon(
                         _typeIcon,
                         color: _typeColor,
-                        size: 16,
+                        size: 14,
                       ),
                     ],
                   ),
                   
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   
                   // Card Name
                   Text(
                     card.name,
                     style: TextStyle(
                       color: canPlay ? Colors.white : Colors.grey,
-                      fontSize: 12,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
-                    maxLines: 2,
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   
                   // Card Description
-                  Expanded(
+                  Flexible(
                     child: Text(
                       card.description,
                       style: TextStyle(
                         color: canPlay 
                             ? Colors.white.withOpacity(0.8) 
                             : Colors.grey.withOpacity(0.6),
-                        fontSize: 9,
+                        fontSize: 8,
                       ),
-                      maxLines: 3,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   
-                  // Physical Requirement (if any)
-                  if (card.physicalRequirement.isNotEmpty) ...[
-                    const SizedBox(height: 4),
+                  // Physical Requirement (if any) - ONLY show if absolutely necessary
+                  if (card.physicalRequirement.isNotEmpty && card.physicalRequirement.length < 10) ...[
+                    const SizedBox(height: 1),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                       decoration: BoxDecoration(
                         color: Colors.brown.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(4),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                       child: Text(
-                        'Physical: ${card.physicalRequirement}',
+                        'P:${card.physicalRequirement}',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 8,
+                          fontSize: 6,
                         ),
                       ),
                     ),
