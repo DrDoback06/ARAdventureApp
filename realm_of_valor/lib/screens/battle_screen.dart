@@ -73,6 +73,11 @@ class _BattleScreenState extends State<BattleScreen>
                   ),
                 ),
                 
+                // EPIC PARTICLE SYSTEM LAYER! ⚡🔥✨
+                const IgnorePointer(
+                  child: BattleParticleSystem(),
+                ),
+                
                 // Main Battle Layout
                 Column(
                   children: [
@@ -123,18 +128,20 @@ class _BattleScreenState extends State<BattleScreen>
                   _buildBattleResultDialog(battleController),
                 
                 // Real-Time Spell Counter Overlay - THE EPIC FINALE! ⚡
-                if (battleController.waitingForCounters && battleController.spellCounterSystem.hasActiveInterrupt)
+                if (battleController.waitingForCounters)
                   Builder(
                     builder: (context) {
                       final currentPlayer = battleController.getCurrentPlayer();
                       if (currentPlayer == null) return const SizedBox();
                       
-                      final availableCounters = battleController.spellCounterSystem.getAvailableCounters(currentPlayer.hand);
+                      // Find counter spells in hand
+                      final availableCounters = currentPlayer.hand.where((card) => 
+                        card.type == ActionCardType.counter).toList();
                       
                       return SpellCounterWidget(
                         spellCounterSystem: battleController.spellCounterSystem,
-                        availableCounters: availableCounters,
-                        onCounterSelected: (counterSpell) {
+                        currentPlayer: currentPlayer,
+                        onCounterAttempt: (counterSpell) {
                           final success = battleController.attemptSpellCounter(counterSpell);
                           if (success) {
                             ScaffoldMessenger.of(context).showSnackBar(
@@ -146,45 +153,96 @@ class _BattleScreenState extends State<BattleScreen>
                             );
                           }
                         },
-                        onSkipCounter: () {
-                          battleController.spellCounterSystem.forceResolve();
-                        },
-                                             );
-                     },
-                   ),
-                
-                // Spell Casting Animation Overlay - THE EPIC MAGIC SYSTEM! ✨⚡
-                if (battleController.showSpellAnimation && battleController.currentSpellAnimation != null)
-                  SpellCastingAnimation(
-                    spell: battleController.currentSpellAnimation!,
-                    startPosition: _getPlayerPosition(battleController.spellCasterId ?? '', context),
-                    targetPosition: _getPlayerPosition(battleController.spellTargetId ?? '', context),
-                    animationType: SpellAnimationHelper.getAnimationTypeForSpell(battleController.currentSpellAnimation!),
-                    background: Container(), // Transparent background
-                    onComplete: () {
-                      // Animation completed
+                      );
                     },
                   ),
                 
-                // Status Effect Banner Overlay - DRAMATIC STATUS ANNOUNCEMENTS! 🌟
-                if (battleController.showStatusBanner && battleController.currentStatusBanner != null)
-                  Positioned(
-                    top: 100,
-                    left: 0,
-                    right: 0,
-                    child: StatusEffectBanner(
-                      effect: battleController.currentStatusBanner!,
-                      onComplete: () {
-                        // Banner completed
-                      },
+                // Spell Casting Animation Overlay - THE EPIC MAGIC SYSTEM! ✨⚡
+                SpellAnimationWidget(
+                  battleController: battleController,
+                ),
+                
+                // Status Effect Overlays for All Players - DRAMATIC PARTICLE EFFECTS! 🌟⚡
+                ...battleController.battle.players.map((player) {
+                  final statusEffects = _convertPlayerStatusEffects(player);
+                  if (statusEffects.isEmpty) return const SizedBox.shrink();
+                  
+                  return Positioned(
+                    left: _getPlayerPosition(player.id, context).dx - 100,
+                    top: _getPlayerPosition(player.id, context).dy - 100,
+                    child: IgnorePointer(
+                      child: StatusEffectOverlay(
+                        statusEffects: statusEffects,
+                        size: 200.0,
+                      ),
                     ),
-                  ),
+                  );
+                }).toList(),
               ],
             );
           },
         ),
       ),
     );
+  }
+
+  /// Convert player status effects to enhanced status effects for particle system
+  List<StatusEffect> _convertPlayerStatusEffects(BattlePlayer player) {
+    final effects = <StatusEffect>[];
+    
+    for (final entry in player.statusEffects.entries) {
+      final effectName = entry.key.toLowerCase();
+      final duration = entry.value;
+      
+      switch (effectName) {
+        case 'burn':
+        case 'burning':
+          effects.add(StatusEffect.burning(duration: duration));
+          break;
+        case 'freeze':
+        case 'frozen':
+          effects.add(StatusEffect.frozen(duration: duration));
+          break;
+        case 'shock':
+        case 'shocked':
+          effects.add(StatusEffect.shocked(duration: duration));
+          break;
+        case 'strength':
+        case 'strengthened':
+          effects.add(StatusEffect.strengthened(duration: duration));
+          break;
+        case 'shield':
+        case 'shielded':
+          effects.add(StatusEffect.shielded(duration: duration));
+          break;
+        case 'regenerating':
+        case 'heal':
+          effects.add(StatusEffect.regenerating(duration: duration));
+          break;
+        case 'weakened':
+        case 'weak':
+          effects.add(StatusEffect.weakened(duration: duration));
+          break;
+        case 'silenced':
+        case 'silence':
+          effects.add(StatusEffect.silenced(duration: duration));
+          break;
+        case 'blessed':
+        case 'blessing':
+          effects.add(StatusEffect.blessed(duration: duration));
+          break;
+        default:
+          // Create a generic effect for unknown status effects
+          effects.add(StatusEffect(
+            type: StatusEffectType.blessed,
+            duration: duration,
+            intensity: 1.0,
+          ));
+          break;
+      }
+    }
+    
+    return effects;
   }
 
   /// Get approximate player position for animations

@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:realm_of_valor/models/spell_counter_system.dart';
-import 'package:realm_of_valor/models/battle_model.dart';
-import 'package:realm_of_valor/widgets/battle_card_widget.dart';
-import 'package:realm_of_valor/effects/particle_system.dart';
+import '../models/spell_counter_system.dart';
+import '../models/battle_model.dart';
+import 'battle_card_widget.dart';
+import '../effects/particle_system.dart';
 import 'dart:async';
 
 class SpellCounterWidget extends StatefulWidget {

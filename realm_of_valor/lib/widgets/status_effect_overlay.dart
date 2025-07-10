@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:realm_of_valor/effects/particle_system.dart';
+import '../effects/particle_system.dart';
 import 'dart:math' as math;
 
 enum StatusEffectType {

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/battle_model.dart';
-import 'package:realm_of_valor/widgets/status_effect_overlay.dart';
-import 'package:realm_of_valor/effects/particle_system.dart';
+import 'status_effect_overlay.dart';
+import '../effects/particle_system.dart';
 import 'dart:math' as math;
 
 class PlayerPortraitWidget extends StatelessWidget {

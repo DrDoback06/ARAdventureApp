@@ -2,10 +2,10 @@ import 'package:flutter/foundation.dart';
 import 'package:realm_of_valor/models/battle_model.dart';
 import 'package:realm_of_valor/models/card_model.dart';
 import 'package:realm_of_valor/models/character_model.dart';
-import 'package:realm_of_valor/models/spell_counter_system.dart';
-import 'package:realm_of_valor/widgets/spell_animation_widget.dart';
-import 'package:realm_of_valor/widgets/status_effect_overlay.dart';
-import 'package:realm_of_valor/effects/particle_system.dart';
+import '../models/spell_counter_system.dart';
+import '../widgets/spell_animation_widget.dart';
+import '../widgets/status_effect_overlay.dart';
+import '../effects/particle_system.dart';
 import 'dart:math' as math;
 import 'dart:async';
 

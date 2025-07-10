@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:realm_of_valor/effects/particle_system.dart';
-import 'package:realm_of_valor/models/battle_model.dart';
+import '../effects/particle_system.dart';
+import '../models/battle_model.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
