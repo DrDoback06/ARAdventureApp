@@ -99,7 +99,7 @@ class BattleCardWidget extends StatelessWidget {
           children: [
             // Main Card Content
             Padding(
-              padding: const EdgeInsets.all(6),
+              padding: const EdgeInsets.all(4),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
@@ -134,21 +134,21 @@ class BattleCardWidget extends StatelessWidget {
                     ],
                   ),
                   
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   
                   // Card Name
                   Text(
                     card.name,
                     style: TextStyle(
                       color: canPlay ? Colors.white : Colors.grey,
-                      fontSize: 11,
+                      fontSize: 10,
                       fontWeight: FontWeight.bold,
                     ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   
-                  const SizedBox(height: 3),
+                  const SizedBox(height: 2),
                   
                   // Card Description
                   Flexible(
@@ -165,20 +165,20 @@ class BattleCardWidget extends StatelessWidget {
                     ),
                   ),
                   
-                  // Physical Requirement (if any)
-                  if (card.physicalRequirement.isNotEmpty) ...[
-                    const SizedBox(height: 3),
+                  // Physical Requirement (if any) - ONLY show if absolutely necessary
+                  if (card.physicalRequirement.isNotEmpty && card.physicalRequirement.length < 10) ...[
+                    const SizedBox(height: 1),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
+                      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                       decoration: BoxDecoration(
                         color: Colors.brown.withOpacity(0.7),
-                        borderRadius: BorderRadius.circular(3),
+                        borderRadius: BorderRadius.circular(2),
                       ),
                       child: Text(
-                        'Phys: ${card.physicalRequirement}',
+                        'P:${card.physicalRequirement}',
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 7,
+                          fontSize: 6,
                         ),
                       ),
                     ),

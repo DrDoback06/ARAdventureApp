@@ -82,6 +82,9 @@ class BattleController extends ChangeNotifier {
   String? get draggedAction => _draggedAction;
   String? get hoveredTargetId => _hoveredTargetId;
   bool get isDragging => _isDragging;
+  
+  // Additional getters for enhanced functionality
+  List<BattlePlayer> get allPlayers => _battle.players;
 
   void _initializeBattle() {
     if (_battle.status == BattleStatus.waiting) {
@@ -173,7 +176,8 @@ class BattleController extends ChangeNotifier {
       return;
     }
     
-    if (_selectedCard == card) {
+    // FIXED: Properly toggle card selection and prevent double-play
+    if (_selectedCard?.id == card.id) {
       _selectedCard = null;
     } else {
       _selectedCard = card;
@@ -725,11 +729,16 @@ class BattleController extends ChangeNotifier {
     
     final currentPlayer = getCurrentPlayer();
     if (currentPlayer != null) {
-      // Draw a card at the start of turn with popup
-      _drawCardWithPopup(currentPlayer.id);
+      // FIXED: Skip card draw popup for first turn to prevent UI blocking
+      if (_battle.currentTurn > 1) {
+        _drawCardWithPopup(currentPlayer.id);
+      } else {
+        // For first turn, just draw directly to hand
+        _drawCards(currentPlayer.id, 1);
+      }
       
-      // Restore some mana (25% of max mana per turn)
-      final manaRestore = (currentPlayer.maxMana * 0.25).round();
+      // Restore some mana (50% of max mana per turn for faster gameplay)
+      final manaRestore = (currentPlayer.maxMana * 0.5).round();
       if (manaRestore > 0) {
         _restoreMana(currentPlayer.id, manaRestore);
       }
@@ -737,7 +746,7 @@ class BattleController extends ChangeNotifier {
       _addBattleLog('${currentPlayer.name}\'s turn begins!', currentPlayer.name);
     }
     
-    // Move to play phase
+    // FIXED: Immediately move to play phase so player can act
     _currentPhase = BattlePhase.playPhase;
     _showPhaseIndicatorWithDelay();
     notifyListeners();
@@ -1189,7 +1198,14 @@ class BattleController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _spellCounterSystem.dispose();
+    // Safely dispose of resources
+    try {
+      // Note: SpellCounterSystem doesn't extend ChangeNotifier anymore, so no dispose needed
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error disposing battle controller: $e');
+      }
+    }
     super.dispose();
   }
 }

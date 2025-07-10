@@ -521,17 +521,31 @@ class _BattleScreenState extends State<BattleScreen>
                   isActive: controller.battle.currentPlayerId == players[0].id,
                   isOpponent: false,
                   onTap: () => controller.selectTarget(players[0].id),
+                  onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                  onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                  isValidDragTarget: controller.isValidDragTarget(players[0].id),
+                  isHovered: controller.hoveredTargetId == players[0].id,
+                  draggedCard: controller.draggedCard,
+                  draggedAction: controller.draggedAction,
+                  onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                  onDragLeave: (targetId) => controller.setHoveredTarget(null),
                 ),
               ),
               if (players.length > 3)
                 Expanded(
-                                                       child: PlayerPortraitWidget(
+                  child: PlayerPortraitWidget(
                     player: players[3],
                     isActive: controller.battle.currentPlayerId == players[3].id,
                     isOpponent: false,
                     onTap: () => controller.selectTarget(players[3].id),
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    isValidDragTarget: controller.isValidDragTarget(players[3].id),
+                    isHovered: controller.hoveredTargetId == players[3].id,
+                    draggedCard: controller.draggedCard,
+                    draggedAction: controller.draggedAction,
+                    onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                    onDragLeave: (targetId) => controller.setHoveredTarget(null),
                   ),
                 ),
             ],
@@ -550,13 +564,19 @@ class _BattleScreenState extends State<BattleScreen>
             children: [
               for (int i = 1; i < 4 && i < players.length)
                 Expanded(
-                                                       child: PlayerPortraitWidget(
+                  child: PlayerPortraitWidget(
                     player: players[i],
                     isActive: controller.battle.currentPlayerId == players[i].id,
                     isOpponent: true,
                     onTap: () => controller.selectTarget(players[i].id),
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    isValidDragTarget: controller.isValidDragTarget(players[i].id),
+                    isHovered: controller.hoveredTargetId == players[i].id,
+                    draggedCard: controller.draggedCard,
+                    draggedAction: controller.draggedAction,
+                    onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                    onDragLeave: (targetId) => controller.setHoveredTarget(null),
                   ),
                 ),
             ],
@@ -579,19 +599,33 @@ class _BattleScreenState extends State<BattleScreen>
                   isActive: controller.battle.currentPlayerId == players[0].id,
                   isOpponent: false,
                   onTap: () => controller.selectTarget(players[0].id),
+                  onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                  onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                  isValidDragTarget: controller.isValidDragTarget(players[0].id),
+                  isHovered: controller.hoveredTargetId == players[0].id,
+                  draggedCard: controller.draggedCard,
+                  draggedAction: controller.draggedAction,
+                  onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                  onDragLeave: (targetId) => controller.setHoveredTarget(null),
                 ),
               ),
-                             for (int i = 4; i < 6 && i < players.length)
-                                   Expanded(
-                    child: PlayerPortraitWidget(
-                      player: players[i],
-                      isActive: controller.battle.currentPlayerId == players[i].id,
-                      isOpponent: false,
-                      onTap: () => controller.selectTarget(players[i].id),
-                      onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
-                      onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    ),
+              for (int i = 4; i < 6 && i < players.length)
+                Expanded(
+                  child: PlayerPortraitWidget(
+                    player: players[i],
+                    isActive: controller.battle.currentPlayerId == players[i].id,
+                    isOpponent: false,
+                    onTap: () => controller.selectTarget(players[i].id),
+                    onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
+                    onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
+                    isValidDragTarget: controller.isValidDragTarget(players[i].id),
+                    isHovered: controller.hoveredTargetId == players[i].id,
+                    draggedCard: controller.draggedCard,
+                    draggedAction: controller.draggedAction,
+                    onDragEnter: (targetId) => controller.setHoveredTarget(targetId),
+                    onDragLeave: (targetId) => controller.setHoveredTarget(null),
                   ),
+                ),
             ],
           ),
         ),
@@ -988,40 +1022,51 @@ class _BattleScreenState extends State<BattleScreen>
           width: 100,
           margin: const EdgeInsets.only(right: 8),
           child: canPlay 
-              ? Draggable<ActionCard>(
-                  data: card,
-                  feedback: Material(
-                    color: Colors.transparent,
-                    child: Transform.scale(
-                      scale: 1.2,
-                      child: Container(
-                        width: 100,
-                        child: BattleCardWidget(
-                          card: card,
-                          canPlay: true,
-                          isSelected: true,
-                          onTap: () {},
-                          onPlay: () {},
+              ? Listener(
+                  onPointerDown: (event) {
+                    controller.startCardDrag(card, event.position);
+                  },
+                  onPointerMove: (event) {
+                    controller.updateDragPosition(event.position);
+                  },
+                  onPointerUp: (event) {
+                    controller.endDrag();
+                  },
+                  child: Draggable<ActionCard>(
+                    data: card,
+                    feedback: Material(
+                      color: Colors.transparent,
+                      child: Transform.scale(
+                        scale: 1.2,
+                        child: Container(
+                          width: 100,
+                          child: BattleCardWidget(
+                            card: card,
+                            canPlay: true,
+                            isSelected: true,
+                            onTap: () {},
+                            onPlay: () {},
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  childWhenDragging: Opacity(
-                    opacity: 0.5,
+                    childWhenDragging: Opacity(
+                      opacity: 0.5,
+                      child: BattleCardWidget(
+                        card: card,
+                        canPlay: false,
+                        isSelected: false,
+                        onTap: () {},
+                        onPlay: () {},
+                      ),
+                    ),
                     child: BattleCardWidget(
                       card: card,
-                      canPlay: false,
-                      isSelected: false,
-                      onTap: () {},
-                      onPlay: () {},
+                      canPlay: canPlay,
+                      isSelected: controller.selectedCard == card,
+                      onTap: () => controller.selectCard(card),
+                      onPlay: () => controller.playCard(card),
                     ),
-                  ),
-                  child: BattleCardWidget(
-                    card: card,
-                    canPlay: canPlay,
-                    isSelected: controller.selectedCard == card,
-                    onTap: () => controller.selectCard(card),
-                    onPlay: () => controller.playCard(card),
                   ),
                 )
               : BattleCardWidget(
