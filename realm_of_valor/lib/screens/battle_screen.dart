@@ -80,6 +80,30 @@ class _BattleScreenState extends State<BattleScreen>
                   child: BattleParticleSystem(),
                 ),
                 
+                // FORCE LOAD - Particle Test (will be visible when new code loads)
+                Positioned(
+                  top: 100,
+                  left: 100,
+                  child: Container(
+                    width: 50,
+                    height: 50,
+                    decoration: BoxDecoration(
+                      color: Colors.green,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.5),
+                          blurRadius: 10,
+                          spreadRadius: 5,
+                        ),
+                      ],
+                    ),
+                    child: const Center(
+                      child: Text('NEW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ),
+                
                 // Main Battle Layout
                 Column(
                   children: [
