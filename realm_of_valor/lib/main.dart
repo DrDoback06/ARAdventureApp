@@ -16,6 +16,8 @@ import 'services/agents/integration_orchestrator_agent.dart';
 import 'services/agents/character_management_agent.dart';
 import 'services/agents/fitness_tracking_agent.dart';
 import 'services/agents/battle_system_agent.dart';
+import 'services/agents/data_persistence_agent.dart';
+import 'services/agents/achievement_agent.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -45,10 +47,14 @@ Future<void> _initializeAgentSystem() async {
     final characterAgent = CharacterManagementAgent();
     final fitnessAgent = FitnessTrackingAgent();
     final battleAgent = BattleSystemAgent();
+    final dataAgent = DataPersistenceAgent(prefs: prefs);
+    final achievementAgent = AchievementAgent();
     
     await AgentOrchestrator.instance.registerAgent(characterAgent);
     await AgentOrchestrator.instance.registerAgent(fitnessAgent);
     await AgentOrchestrator.instance.registerAgent(battleAgent);
+    await AgentOrchestrator.instance.registerAgent(dataAgent);
+    await AgentOrchestrator.instance.registerAgent(achievementAgent);
     
     print('Agent system initialized successfully');
   } catch (e) {
