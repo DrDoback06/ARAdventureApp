@@ -1,6 +1,8 @@
 // Simple compilation test for the new battle system features
-import 'lib/models/battle_model.dart';
+import 'package:flutter/material.dart';
 import 'lib/models/card_model.dart';
+import 'lib/models/battle_result_model.dart';
+import 'lib/models/battle_model.dart';
 import 'lib/models/character_model.dart';
 import 'lib/services/character_service.dart';
 import 'lib/widgets/visual_effects_widget.dart';
@@ -44,15 +46,14 @@ void main() {
   // Test BattleResult creation
   try {
     final battleResult = BattleResult(
-      isVictory: true,
-      damageDealt: 150,
-      cardsPlayed: 8,
-      skillsUsed: 4,
-      turnsTaken: 5,
+      battleId: 'test_battle_001',
+      outcome: BattleOutcome.victory,
+      experienceGained: 150,
+      goldGained: 100,
     );
     print('✅ BattleResult created successfully');
     print('   Victory: ${battleResult.isVictory}');
-    print('   Damage dealt: ${battleResult.damageDealt}');
+    print('   Experience gained: ${battleResult.experienceGained}');
   } catch (e) {
     print('❌ BattleResult creation failed: $e');
   }
