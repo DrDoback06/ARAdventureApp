@@ -163,7 +163,7 @@ class AgentStatus {
 
 /// Integration Orchestrator Agent - Central coordinator for all agents
 class IntegrationOrchestratorAgent extends BaseAgent {
-  static const String agentId = 'integration_orchestrator';
+  static const String _agentTypeId = 'integration_orchestrator';
 
   final Map<String, BaseAgent> _agents = {};
   final Map<String, AgentStatus> _agentStatus = {};

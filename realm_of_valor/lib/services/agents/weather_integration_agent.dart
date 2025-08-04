@@ -340,7 +340,7 @@ class EnvironmentalState {
 
 /// Weather Integration Agent - Real-world weather affects gameplay
 class WeatherIntegrationAgent extends BaseAgent {
-  static const String agentId = 'weather_integration';
+  static const String _agentTypeId = 'weather_integration';
 
   final SharedPreferences _prefs;
 
@@ -370,7 +370,7 @@ class WeatherIntegrationAgent extends BaseAgent {
   WeatherIntegrationAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

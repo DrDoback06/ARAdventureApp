@@ -1,4 +1,7 @@
+import 'dart:math';
+import 'package:flutter/material.dart';
 import 'package:json_annotation/json_annotation.dart';
+import 'adventure_route.dart';
 import 'adventure_system.dart';
 
 part 'trail_model.g.dart';

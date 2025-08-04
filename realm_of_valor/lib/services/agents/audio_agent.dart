@@ -351,9 +351,9 @@ class AudioSettings {
   }
 }
 
-/// Audio Agent - Immersive audio system with dynamic music and spatial effects
+/// Audio Agent - Immersive spatial audio and dynamic music
 class AudioAgent extends BaseAgent {
-  static const String agentId = 'audio';
+  static const String _agentTypeId = 'audio';
 
   final SharedPreferences _prefs;
 
@@ -386,11 +386,11 @@ class AudioAgent extends BaseAgent {
   AudioAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing Audio Agent', name: agentId);
+    developer.log('Initializing Audio Agent', name: _agentTypeId);
 
     // Load audio settings
     await _loadAudioSettings();
@@ -407,7 +407,7 @@ class AudioAgent extends BaseAgent {
     // Start context analysis
     _startContextAnalysis();
 
-    developer.log('Audio Agent initialized with ${_audioLibrary.length} tracks and ${_audioContexts.length} contexts', name: agentId);
+    developer.log('Audio Agent initialized with ${_audioLibrary.length} tracks and ${_audioContexts.length} contexts', name: _agentTypeId);
   }
 
   @override
@@ -475,7 +475,7 @@ class AudioAgent extends BaseAgent {
   }) {
     final track = _audioLibrary[trackId];
     if (track == null) {
-      developer.log('Audio track not found: $trackId', name: agentId);
+      developer.log('Audio track not found: $trackId', name: _agentTypeId);
       return '';
     }
 
@@ -536,7 +536,7 @@ class AudioAgent extends BaseAgent {
     _totalTracksPlayed++;
     _lastAudioEvent = DateTime.now();
 
-    developer.log('Playing audio: ${track.name} (ID: $instanceId)', name: agentId);
+    developer.log('Playing audio: ${track.name} (ID: $instanceId)', name: _agentTypeId);
     return instanceId;
   }
 
@@ -571,7 +571,7 @@ class AudioAgent extends BaseAgent {
   void changeAudioContext(String contextId) {
     final context = _audioContexts[contextId];
     if (context == null) {
-      developer.log('Audio context not found: $contextId', name: agentId);
+      developer.log('Audio context not found: $contextId', name: _agentTypeId);
       return;
     }
 
@@ -599,7 +599,7 @@ class AudioAgent extends BaseAgent {
       'newContext': contextId,
     });
 
-    developer.log('Audio context changed: $previousContext -> $contextId', name: agentId);
+    developer.log('Audio context changed: $previousContext -> $contextId', name: _agentTypeId);
   }
 
   /// Update spatial audio listener position
@@ -1115,7 +1115,7 @@ class AudioAgent extends BaseAgent {
       ),
     });
 
-    developer.log('Loaded ${_audioLibrary.length} audio tracks', name: agentId);
+    developer.log('Loaded ${_audioLibrary.length} audio tracks', name: _agentTypeId);
   }
 
   /// Load audio contexts
@@ -1128,7 +1128,7 @@ class AudioAgent extends BaseAgent {
           _audioContexts[entry.key] = AudioContext.fromJson(entry.value);
         }
       } catch (e) {
-        developer.log('Error loading audio contexts: $e', name: agentId);
+        developer.log('Error loading audio contexts: $e', name: _agentTypeId);
       }
     }
   }
@@ -1147,7 +1147,7 @@ class AudioAgent extends BaseAgent {
         final data = jsonDecode(settingsJson) as Map<String, dynamic>;
         _audioSettings = AudioSettings.fromJson(data);
       } catch (e) {
-        developer.log('Error loading audio settings: $e', name: agentId);
+        developer.log('Error loading audio settings: $e', name: _agentTypeId);
       }
     }
   }
@@ -1722,6 +1722,6 @@ class AudioAgent extends BaseAgent {
     await _saveAudioSettings();
     await _saveAudioContexts();
 
-    developer.log('Audio Agent disposed', name: agentId);
+    developer.log('Audio Agent disposed', name: _agentTypeId);
   }
 }

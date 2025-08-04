@@ -8,10 +8,11 @@ import '../../models/character.dart';
 import '../../models/card.dart';
 import '../../services/character_service.dart';
 import 'integration_orchestrator_agent.dart';
+import '../../models/character_classes.dart';
 
 /// Character Management Agent - Central hub for all character-related functionality
 class CharacterManagementAgent extends BaseAgent {
-  static const String agentId = 'character_management';
+  static const String _agentTypeId = 'character_management';
 
   final CharacterService _characterService;
   Character? _currentCharacter;
@@ -35,7 +36,7 @@ class CharacterManagementAgent extends BaseAgent {
   CharacterManagementAgent({
     CharacterService? characterService,
   }) : _characterService = characterService ?? CharacterService(),
-        super(agentId: agentId);
+        super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

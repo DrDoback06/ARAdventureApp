@@ -290,7 +290,7 @@ class PerformanceSession {
 
 /// Performance Optimization Agent - Advanced performance monitoring and optimization
 class PerformanceOptimizationAgent extends BaseAgent {
-  static const String agentId = 'performance_optimization';
+  static const String _agentTypeId = 'performance_optimization';
 
   final SharedPreferences _prefs;
 
@@ -331,7 +331,7 @@ class PerformanceOptimizationAgent extends BaseAgent {
   PerformanceOptimizationAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

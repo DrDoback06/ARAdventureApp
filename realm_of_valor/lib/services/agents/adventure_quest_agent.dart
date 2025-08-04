@@ -6,8 +6,8 @@ import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/event_bus.dart';
-import '../../models/quest_model.dart';
-import '../../models/adventure_system.dart';
+import '../../models/quest_model.dart' as quest_model;
+import '../../models/adventure_system.dart' as adventure_system;
 import '../../services/enhanced_location_service.dart';
 import 'integration_orchestrator_agent.dart';
 
@@ -199,10 +199,11 @@ class PointOfInterest {
   }
 }
 
-/// Adventure & Quest Agent - GPS-based quests and AR experiences
+/// Adventure Quest Agent - AI-Powered Quest Generation & World State Management
 class AdventureQuestAgent extends BaseAgent {
-  static const String agentId = 'adventure_quest';
+  static const String _agentTypeId = 'adventure_quest';
 
+  // Dependencies
   final SharedPreferences _prefs;
   final EnhancedLocationService? _locationService;
 
@@ -210,8 +211,9 @@ class AdventureQuestAgent extends BaseAgent {
   String? _currentUserId;
   GeoLocation? _currentLocation;
 
-  // Quest management
-  final Map<String, Quest> _availableQuests = {};
+  // Quest Management
+  final List<quest_model.Quest> _activeQuests = [];
+  final Map<String, quest_model.Quest> _availableQuests = {};
   final Map<String, AdventureInstance> _activeAdventures = {}; // instanceId -> adventure
   final Map<String, List<String>> _userActiveQuests = {}; // userId -> List<instanceId>
   final Map<String, List<String>> _userCompletedQuests = {}; // userId -> List<questId>
@@ -232,13 +234,13 @@ class AdventureQuestAgent extends BaseAgent {
   AdventureQuestAgent({
     required SharedPreferences prefs,
     EnhancedLocationService? locationService,
-  }) : _prefs = prefs,
-       _locationService = locationService,
-       super(agentId: agentId);
+    }) : _prefs = prefs,
+        _locationService = locationService,
+        super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing Adventure & Quest Agent', name: agentId);
+    developer.log('Initializing Adventure & Quest Agent', name: _agentTypeId);
 
     // Load quest database
     await _loadQuestDatabase();
@@ -258,7 +260,7 @@ class AdventureQuestAgent extends BaseAgent {
     // Start quest progress monitoring
     _startQuestProgressMonitoring();
 
-    developer.log('Adventure & Quest Agent initialized with ${_availableQuests.length} quests and ${_pointsOfInterest.length} POIs', name: agentId);
+    developer.log('Adventure & Quest Agent initialized with ${_availableQuests.length} quests and ${_pointsOfInterest.length} POIs', name: _agentTypeId);
   }
 
   @override
@@ -308,13 +310,13 @@ class AdventureQuestAgent extends BaseAgent {
   Future<AdventureInstance?> startQuest(String userId, String questId) async {
     final quest = _availableQuests[questId];
     if (quest == null) {
-      developer.log('Quest not found: $questId', name: agentId);
+      developer.log('Quest not found: $questId', name: _agentTypeId);
       return null;
     }
 
     // Check prerequisites
     if (!_checkQuestPrerequisites(userId, quest)) {
-      developer.log('Quest prerequisites not met for user $userId: $questId', name: agentId);
+      developer.log('Quest prerequisites not met for user $userId: $questId', name: _agentTypeId);
       return null;
     }
 
@@ -370,7 +372,7 @@ class AdventureQuestAgent extends BaseAgent {
 
     // Check if all objectives are completed
     if (!_isQuestComplete(adventure, quest)) {
-      developer.log('Quest not yet complete: ${adventure.questId}', name: agentId);
+      developer.log('Quest not yet complete: ${adventure.questId}', name: _agentTypeId);
       return false;
     }
 
@@ -486,7 +488,7 @@ class AdventureQuestAgent extends BaseAgent {
     if (experience.location != null && _currentLocation != null) {
       final distance = experience.location!.distanceTo(_currentLocation!);
       if (experience.triggerRadius != null && distance > experience.triggerRadius!) {
-        developer.log('User too far from AR experience location: $experienceId', name: agentId);
+        developer.log('User too far from AR experience location: $experienceId', name: _agentTypeId);
         return null;
       }
     }
@@ -677,7 +679,7 @@ class AdventureQuestAgent extends BaseAgent {
   /// Load quest database
   Future<void> _loadQuestDatabase() async {
     // Load default quests
-    final defaultQuests = Quest.getDefaultQuests();
+    final defaultQuests = quest_model.Quest.getDefaultQuests();
     for (final quest in defaultQuests) {
       _availableQuests[quest.id] = quest;
     }
@@ -688,37 +690,37 @@ class AdventureQuestAgent extends BaseAgent {
     // Add AR experience quests
     _availableQuests.addAll(_createARExperienceQuests());
 
-    developer.log('Loaded ${_availableQuests.length} quests', name: agentId);
+    developer.log('Loaded ${_availableQuests.length} quests', name: _agentTypeId);
   }
 
   /// Create location-based quests
-  Map<String, Quest> _createLocationBasedQuests() {
+  Map<String, quest_model.Quest> _createLocationBasedQuests() {
     return {
-      'city_explorer': Quest(
+      'city_explorer': quest_model.Quest(
         name: 'City Explorer',
         description: 'Visit 3 historical landmarks in your city',
         story: 'The city holds ancient secrets. Visit the marked locations to uncover the hidden history.',
-        type: QuestType.exploration,
-        difficulty: QuestDifficulty.medium,
+        type: quest_model.QuestType.exploration,
+        difficulty: quest_model.QuestDifficulty.medium,
         objectives: [
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Visit historical landmark 1',
             type: 'location_visited',
             targetValue: 1,
           ),
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Visit historical landmark 2',
             type: 'location_visited',
             targetValue: 1,
           ),
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Visit historical landmark 3',
             type: 'location_visited',
             targetValue: 1,
           ),
         ],
         rewards: [
-          QuestReward(
+          quest_model.QuestReward(
             type: 'card',
             name: 'Explorer\'s Compass',
             value: 1,
@@ -728,26 +730,26 @@ class AdventureQuestAgent extends BaseAgent {
         experienceReward: 400,
         goldReward: 150,
       ),
-      'park_ranger': Quest(
+      'park_ranger': quest_model.Quest(
         name: 'Park Ranger',
         description: 'Walk through 5 different parks and discover nature',
         story: 'The natural world is calling. Become one with nature by exploring local parks.',
-        type: QuestType.exploration,
-        difficulty: QuestDifficulty.easy,
+        type: quest_model.QuestType.exploration,
+        difficulty: quest_model.QuestDifficulty.easy,
         objectives: [
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Visit 5 different parks',
             type: 'park_visited',
             targetValue: 5,
           ),
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Walk 3 miles total',
             type: 'distance',
             targetValue: 4828, // meters
           ),
         ],
         rewards: [
-          QuestReward(
+          quest_model.QuestReward(
             type: 'stat_boost',
             name: 'Nature\'s Blessing',
             value: 3,
@@ -760,33 +762,33 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Create AR experience quests
-  Map<String, Quest> _createARExperienceQuests() {
+  Map<String, quest_model.Quest> _createARExperienceQuests() {
     return {
-      'ar_treasure_hunter': Quest(
+      'ar_treasure_hunter': quest_model.Quest(
         name: 'AR Treasure Hunter',
         description: 'Use AR to find 3 hidden treasures around the city',
         story: 'Ancient treasures are hidden in plain sight. Use your AR vision to uncover them.',
-        type: QuestType.exploration,
-        difficulty: QuestDifficulty.hard,
+        type: quest_model.QuestType.exploration,
+        difficulty: quest_model.QuestDifficulty.hard,
         objectives: [
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Find AR treasure 1',
             type: 'treasure_found',
             targetValue: 1,
           ),
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Find AR treasure 2',
             type: 'treasure_found',
             targetValue: 1,
           ),
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Find AR treasure 3',
             type: 'treasure_found',
             targetValue: 1,
           ),
         ],
         rewards: [
-          QuestReward(
+          quest_model.QuestReward(
             type: 'card',
             name: 'Treasure Hunter\'s Map',
             value: 1,
@@ -796,21 +798,21 @@ class AdventureQuestAgent extends BaseAgent {
         experienceReward: 600,
         goldReward: 300,
       ),
-      'ar_puzzle_master': Quest(
+      'ar_puzzle_master': quest_model.Quest(
         name: 'AR Puzzle Master',
         description: 'Solve 5 AR puzzles scattered around the world',
         story: 'Test your wit against ancient puzzles that appear through AR magic.',
-        type: QuestType.exploration,
-        difficulty: QuestDifficulty.expert,
+        type: quest_model.QuestType.exploration,
+        difficulty: quest_model.QuestDifficulty.expert,
         objectives: [
-          QuestObjective(
+          quest_model.QuestObjective(
             description: 'Solve AR puzzles',
             type: 'puzzle_solved',
             targetValue: 5,
           ),
         ],
         rewards: [
-          QuestReward(
+          quest_model.QuestReward(
             type: 'stat_boost',
             name: 'Mind Sharpening',
             value: 5,
@@ -852,7 +854,7 @@ class AdventureQuestAgent extends BaseAgent {
       ),
     });
 
-    developer.log('Initialized ${_pointsOfInterest.length} POIs', name: agentId);
+    developer.log('Initialized ${_pointsOfInterest.length} POIs', name: _agentTypeId);
   }
 
   /// Initialize AR experiences
@@ -894,7 +896,7 @@ class AdventureQuestAgent extends BaseAgent {
     _locationARMapping['city_library'] = ['library_puzzle'];
     _locationARMapping['adventure_statue'] = ['statue_scan'];
 
-    developer.log('Initialized ${_arExperiences.length} AR experiences', name: agentId);
+    developer.log('Initialized ${_arExperiences.length} AR experiences', name: _agentTypeId);
   }
 
   /// Initialize location tracking
@@ -905,7 +907,7 @@ class AdventureQuestAgent extends BaseAgent {
       if (permission == LocationPermission.denied) {
         final requestedPermission = await Geolocator.requestPermission();
         if (requestedPermission == LocationPermission.denied) {
-          developer.log('Location permission denied', name: agentId);
+          developer.log('Location permission denied', name: _agentTypeId);
           return;
         }
       }
@@ -918,9 +920,9 @@ class AdventureQuestAgent extends BaseAgent {
         ),
       ).listen(_onLocationUpdate);
 
-      developer.log('Location tracking initialized', name: agentId);
+      developer.log('Location tracking initialized', name: _agentTypeId);
     } catch (e) {
-      developer.log('Error initializing location tracking: $e', name: agentId);
+      developer.log('Error initializing location tracking: $e', name: _agentTypeId);
     }
   }
 
@@ -1013,7 +1015,7 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Setup quest-specific geofences
-  void _setupQuestGeofences(AdventureInstance adventure, Quest quest) {
+  void _setupQuestGeofences(AdventureInstance adventure, quest_model.Quest quest) {
     // Main quest location
     if (quest.location != null) {
       final geofence = GeofenceRegion(
@@ -1067,7 +1069,7 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Check quest prerequisites
-  bool _checkQuestPrerequisites(String userId, Quest quest) {
+  bool _checkQuestPrerequisites(String userId, quest_model.Quest quest) {
     final completedQuests = _userCompletedQuests[userId] ?? [];
     
     for (final prerequisite in quest.prerequisites) {
@@ -1079,7 +1081,7 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Check if quest is complete
-  bool _isQuestComplete(AdventureInstance adventure, Quest quest) {
+  bool _isQuestComplete(AdventureInstance adventure, quest_model.Quest quest) {
     for (final objective in quest.objectives) {
       final currentValue = adventure.progressData[objective.id] ?? 0;
       if (currentValue < objective.targetValue) {
@@ -1090,7 +1092,7 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Calculate quest progress percentage
-  double _calculateQuestProgress(Quest quest, Map<String, dynamic> progressData) {
+  double _calculateQuestProgress(quest_model.Quest quest, Map<String, dynamic> progressData) {
     if (quest.objectives.isEmpty) return 0.0;
 
     double totalProgress = 0.0;
@@ -1104,7 +1106,7 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Calculate new objective value
-  dynamic _calculateNewObjectiveValue(QuestObjective objective, dynamic currentValue, dynamic newValue) {
+  dynamic _calculateNewObjectiveValue(quest_model.QuestObjective objective, dynamic currentValue, dynamic newValue) {
     switch (objective.type) {
       case 'distance':
       case 'steps':
@@ -1122,7 +1124,7 @@ class AdventureQuestAgent extends BaseAgent {
   }
 
   /// Distribute quest rewards
-  Future<void> _distributeQuestRewards(String userId, Quest quest, AdventureInstance adventure) async {
+  Future<void> _distributeQuestRewards(String userId, quest_model.Quest quest, AdventureInstance adventure) async {
     // Experience and gold rewards
     if (quest.experienceReward > 0 || quest.goldReward > 0) {
       await publishEvent(createEvent(
@@ -1269,7 +1271,7 @@ class AdventureQuestAgent extends BaseAgent {
           }
         }
       } catch (e) {
-        developer.log('Error loading user adventure data: $e', name: agentId);
+        developer.log('Error loading user adventure data: $e', name: _agentTypeId);
       }
     }
   }
@@ -1796,6 +1798,6 @@ class AdventureQuestAgent extends BaseAgent {
     // Save all data
     await _saveAllAdventureData();
 
-    developer.log('Adventure & Quest Agent disposed', name: agentId);
+    developer.log('Adventure & Quest Agent disposed', name: _agentTypeId);
   }
 }

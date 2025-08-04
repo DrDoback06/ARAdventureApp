@@ -18,11 +18,8 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     
-    // Create character service
-    final characterService = CharacterService(prefs);
-    
     // Build our app and trigger a frame.
-    await tester.pumpWidget(RealmOfValorApp(characterService: characterService));
+    await tester.pumpWidget(RealmOfValorApp(prefs: prefs));
 
     // Verify that the app loads
     expect(find.text('Realm of Valor'), findsOneWidget);

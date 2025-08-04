@@ -73,7 +73,7 @@ class RealmOfValorTheme {
       ),
       
       // Card Theme
-      cardTheme: const CardTheme(
+      cardTheme: const CardThemeData(
         color: surfaceMedium,
         elevation: 8,
         shadowColor: shadowBlack,
@@ -199,7 +199,7 @@ class RealmOfValorTheme {
       ),
       
       // Tab Bar Theme
-      tabBarTheme: const TabBarTheme(
+      tabBarTheme: const TabBarThemeData(
         labelColor: accentGold,
         unselectedLabelColor: textSecondary,
         indicatorColor: accentGold,
@@ -231,7 +231,7 @@ class RealmOfValorTheme {
       ),
       
       // Dialog Theme
-      dialogTheme: const DialogTheme(
+      dialogTheme: const DialogThemeData(
         backgroundColor: surfaceMedium,
         elevation: 24,
         shadowColor: shadowBlack,

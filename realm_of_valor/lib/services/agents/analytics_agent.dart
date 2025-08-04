@@ -404,9 +404,9 @@ class AnalyticsSession {
   }
 }
 
-/// Analytics Agent - Advanced user behavior analysis and ML insights
+/// Analytics Agent - ML-powered user behavior analysis and insights
 class AnalyticsAgent extends BaseAgent {
-  static const String agentId = 'analytics';
+  static const String _agentTypeId = 'analytics';
 
   final SharedPreferences _prefs;
 
@@ -438,11 +438,11 @@ class AnalyticsAgent extends BaseAgent {
   AnalyticsAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing Analytics Agent', name: agentId);
+    developer.log('Initializing Analytics Agent', name: _agentTypeId);
 
     // Load analytics data
     await _loadAnalyticsData();
@@ -459,7 +459,7 @@ class AnalyticsAgent extends BaseAgent {
     // Start model updating
     _startModelUpdating();
 
-    developer.log('Analytics Agent initialized with ${_userProfiles.length} user profiles', name: agentId);
+    developer.log('Analytics Agent initialized with ${_userProfiles.length} user profiles', name: _agentTypeId);
   }
 
   @override
@@ -568,7 +568,7 @@ class AnalyticsAgent extends BaseAgent {
       'hasValue': value != null,
     });
 
-    developer.log('Analytics event tracked: $name', name: agentId);
+    developer.log('Analytics event tracked: $name', name: _agentTypeId);
   }
 
   /// Track analytics metric
@@ -643,7 +643,7 @@ class AnalyticsAgent extends BaseAgent {
 
     trackEvent(AnalyticsEventCategory.user_behavior, 'session_started');
 
-    developer.log('Analytics session started: ${_currentSession!.sessionId}', name: agentId);
+    developer.log('Analytics session started: ${_currentSession!.sessionId}', name: _agentTypeId);
     return _currentSession!.sessionId;
   }
 
@@ -676,7 +676,7 @@ class AnalyticsAgent extends BaseAgent {
     _currentSession = null;
     _currentUserId = null;
 
-    developer.log('Analytics session ended', name: agentId);
+    developer.log('Analytics session ended', name: _agentTypeId);
   }
 
   /// Get user predictions
@@ -1091,7 +1091,7 @@ class AnalyticsAgent extends BaseAgent {
       },
     });
 
-    developer.log('ML models initialized', name: agentId);
+    developer.log('ML models initialized', name: _agentTypeId);
   }
 
   /// Start analytics processing
@@ -1161,7 +1161,7 @@ class AnalyticsAgent extends BaseAgent {
     // User behavior patterns
     _analyzeUserBehaviorPatterns();
     
-    developer.log('Generated ${_insights.length} insights', name: agentId);
+    developer.log('Generated ${_insights.length} insights', name: _agentTypeId);
   }
 
   /// Analyze trends
@@ -1276,7 +1276,7 @@ class AnalyticsAgent extends BaseAgent {
       'dataSize': _userProfiles.length,
     });
 
-    developer.log('ML models updated', name: agentId);
+    developer.log('ML models updated', name: _agentTypeId);
   }
 
   /// Load analytics data
@@ -1319,7 +1319,7 @@ class AnalyticsAgent extends BaseAgent {
       }
 
     } catch (e) {
-      developer.log('Error loading analytics data: $e', name: agentId);
+      developer.log('Error loading analytics data: $e', name: _agentTypeId);
     }
   }
 
@@ -1343,7 +1343,7 @@ class AnalyticsAgent extends BaseAgent {
       await _prefs.setString('analytics_insights', jsonEncode(_insights.map((i) => i.toJson()).toList()));
 
     } catch (e) {
-      developer.log('Error saving analytics data: $e', name: agentId);
+      developer.log('Error saving analytics data: $e', name: _agentTypeId);
     }
   }
 
@@ -1664,6 +1664,6 @@ class AnalyticsAgent extends BaseAgent {
     // Save all data
     await _saveAnalyticsData();
 
-    developer.log('Analytics Agent disposed', name: agentId);
+    developer.log('Analytics Agent disposed', name: _agentTypeId);
   }
 }

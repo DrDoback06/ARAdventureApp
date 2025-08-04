@@ -197,7 +197,7 @@ class UserLocationData {
 
 /// Location Services Agent - GPS integration with POI system and geofencing
 class LocationServicesAgent extends BaseAgent {
-  static const String agentId = 'location_services';
+  static const String _agentTypeId = 'location_services';
 
   final SharedPreferences _prefs;
   final EnhancedLocationService? _enhancedLocationService;
@@ -230,7 +230,7 @@ class LocationServicesAgent extends BaseAgent {
     EnhancedLocationService? enhancedLocationService,
   }) : _prefs = prefs,
        _enhancedLocationService = enhancedLocationService,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

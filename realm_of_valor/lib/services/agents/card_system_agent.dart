@@ -145,9 +145,9 @@ class CardPack {
   }) : rarityWeights = rarityWeights ?? CardDatabase.rarityWeights;
 }
 
-/// Card System Agent - Complete card management with QR integration
+/// Card System Agent - Card collection and management
 class CardSystemAgent extends BaseAgent {
-  static const String agentId = 'card_system';
+  static const String _agentTypeId = 'card_system';
 
   final SharedPreferences _prefs;
   final QRScannerService _qrScanner;
@@ -172,11 +172,11 @@ class CardSystemAgent extends BaseAgent {
     QRScannerService? qrScanner,
   }) : _prefs = prefs,
        _qrScanner = qrScanner ?? QRScannerService._internal(),
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing Card System Agent', name: agentId);
+    developer.log('Initializing Card System Agent', name: _agentTypeId);
 
     // Load card databases
     await _loadCardDatabase();
@@ -187,7 +187,7 @@ class CardSystemAgent extends BaseAgent {
     // Load user data
     await _loadUserData();
 
-    developer.log('Card System Agent initialized with ${_allCards.length} cards', name: agentId);
+    developer.log('Card System Agent initialized with ${_allCards.length} cards', name: _agentTypeId);
   }
 
   @override
@@ -257,7 +257,7 @@ class CardSystemAgent extends BaseAgent {
 
       return result;
     } catch (e) {
-      developer.log('Error scanning QR card: $e', name: agentId);
+      developer.log('Error scanning QR card: $e', name: _agentTypeId);
       return null;
     }
   }
@@ -269,7 +269,7 @@ class CardSystemAgent extends BaseAgent {
     Map<String, dynamic> metadata = const {},
   }) async {
     if (!_allCards.containsKey(cardId)) {
-      developer.log('Card not found: $cardId', name: agentId);
+      developer.log('Card not found: $cardId', name: _agentTypeId);
       return false;
     }
 
@@ -318,13 +318,13 @@ class CardSystemAgent extends BaseAgent {
     );
 
     if (ownedCard.cardId.isEmpty) {
-      developer.log('User $userId does not own card $cardId', name: agentId);
+      developer.log('User $userId does not own card $cardId', name: _agentTypeId);
       return false;
     }
 
     // Check if card can be equipped to this slot
     if (card.equipmentSlot != slot && card.equipmentSlot != EquipmentSlot.none) {
-      developer.log('Card $cardId cannot be equipped to slot $slot', name: agentId);
+      developer.log('Card $cardId cannot be equipped to slot $slot', name: _agentTypeId);
       return false;
     }
 
@@ -429,7 +429,7 @@ class CardSystemAgent extends BaseAgent {
     // Check if user has enough currency
     final userGold = _userCurrency[userId] ?? 0;
     if (userGold < pack.cost) {
-      developer.log('User $userId does not have enough gold for pack $packId', name: agentId);
+      developer.log('User $userId does not have enough gold for pack $packId', name: _agentTypeId);
       return [];
     }
 
@@ -537,7 +537,7 @@ class CardSystemAgent extends BaseAgent {
       _allCards[card.id] = card;
     }
 
-    developer.log('Loaded ${_allCards.length} cards from database', name: agentId);
+    developer.log('Loaded ${_allCards.length} cards from database', name: _agentTypeId);
   }
 
   /// Initialize card packs
@@ -614,7 +614,7 @@ class CardSystemAgent extends BaseAgent {
               .toList();
         }
       } catch (e) {
-        developer.log('Error loading user inventories: $e', name: agentId);
+        developer.log('Error loading user inventories: $e', name: _agentTypeId);
       }
     }
   }
@@ -630,7 +630,7 @@ class CardSystemAgent extends BaseAgent {
           _userEquipment[userId] = EquipmentLoadout.fromJson(entry.value);
         }
       } catch (e) {
-        developer.log('Error loading user equipment: $e', name: agentId);
+        developer.log('Error loading user equipment: $e', name: _agentTypeId);
       }
     }
   }
@@ -645,7 +645,7 @@ class CardSystemAgent extends BaseAgent {
           _userCurrency[entry.key] = entry.value as int;
         }
       } catch (e) {
-        developer.log('Error loading user currency: $e', name: agentId);
+        developer.log('Error loading user currency: $e', name: _agentTypeId);
       }
     }
   }
@@ -1507,6 +1507,6 @@ class CardSystemAgent extends BaseAgent {
     await _saveAllUserEquipment();
     await _saveAllUserCurrency();
 
-    developer.log('Card System Agent disposed', name: agentId);
+    developer.log('Card System Agent disposed', name: _agentTypeId);
   }
 }

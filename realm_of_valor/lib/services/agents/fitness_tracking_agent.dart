@@ -12,7 +12,7 @@ import 'integration_orchestrator_agent.dart';
 
 /// Fitness Tracking Agent - Convert real-world activities into character progression
 class FitnessTrackingAgent extends BaseAgent {
-  static const String agentId = 'fitness_tracking';
+  static const String _agentTypeId = 'fitness_tracking';
 
   final FitnessTrackerService _fitnessService;
   final PhysicalActivityService _activityService;
@@ -47,7 +47,7 @@ class FitnessTrackingAgent extends BaseAgent {
     PhysicalActivityService? activityService,
   }) : _fitnessService = fitnessService ?? FitnessTrackerService(),
         _activityService = activityService ?? PhysicalActivityService(),
-        super(agentId: agentId);
+        super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

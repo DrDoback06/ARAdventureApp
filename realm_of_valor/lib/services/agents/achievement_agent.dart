@@ -189,7 +189,7 @@ class AchievementNotification {
 
 /// Achievement Agent - Track all progress types and distribute rewards
 class AchievementAgent extends BaseAgent {
-  static const String agentId = 'achievement';
+  static const String _agentTypeId = 'achievement';
 
   final Map<String, Achievement> _achievements = {};
   final Map<String, Map<String, AchievementProgress>> _userProgress = {}; // userId -> achievementId -> progress
@@ -202,11 +202,11 @@ class AchievementAgent extends BaseAgent {
   final Map<String, dynamic> _userStats = {};
   Timer? _progressTimer;
 
-  AchievementAgent() : super(agentId: agentId);
+  AchievementAgent() : super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing Achievement Agent', name: agentId);
+    developer.log('Initializing Achievement Agent', name: _agentTypeId);
     
     // Initialize achievement definitions
     _initializeAchievements();
@@ -217,7 +217,7 @@ class AchievementAgent extends BaseAgent {
     // Start periodic progress checks
     _startProgressTracking();
     
-    developer.log('Achievement Agent initialized with ${_achievements.length} achievements', name: agentId);
+    developer.log('Achievement Agent initialized with ${_achievements.length} achievements', name: _agentTypeId);
   }
 
   @override
@@ -550,7 +550,7 @@ class AchievementAgent extends BaseAgent {
     }
     
     if (unlockedAchievements.isNotEmpty) {
-      developer.log('Unlocked ${unlockedAchievements.length} achievements for user $userId', name: agentId);
+      developer.log('Unlocked ${unlockedAchievements.length} achievements for user $userId', name: _agentTypeId);
     }
   }
 
@@ -601,7 +601,7 @@ class AchievementAgent extends BaseAgent {
       priority: EventPriority.high,
     ));
     
-    developer.log('Achievement unlocked: $achievementId for user $userId', name: agentId);
+    developer.log('Achievement unlocked: $achievementId for user $userId', name: _agentTypeId);
   }
 
   /// Update achievement progress
@@ -668,7 +668,7 @@ class AchievementAgent extends BaseAgent {
   /// Load user progress from data persistence
   Future<void> _loadUserProgress() async {
     // TODO: Load from Data Persistence Agent
-    developer.log('Loading user progress from storage', name: agentId);
+    developer.log('Loading user progress from storage', name: _agentTypeId);
   }
 
   /// Save user progress to data persistence
@@ -1151,6 +1151,6 @@ class AchievementAgent extends BaseAgent {
       await _saveUserProgress(userId);
     }
     
-    developer.log('Achievement Agent disposed', name: agentId);
+    developer.log('Achievement Agent disposed', name: _agentTypeId);
   }
 }

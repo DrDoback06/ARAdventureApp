@@ -446,7 +446,7 @@ class SocialNotificationAction {
 
 /// Social Features Agent - Friend system, guilds, and multiplayer features
 class SocialFeaturesAgent extends BaseAgent {
-  static const String agentId = 'social_features';
+  static const String _agentTypeId = 'social_features';
 
   final SharedPreferences _prefs;
 
@@ -478,7 +478,7 @@ class SocialFeaturesAgent extends BaseAgent {
   SocialFeaturesAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
