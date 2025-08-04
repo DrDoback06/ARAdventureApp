@@ -12,6 +12,10 @@ import 'services/strava_service.dart';
 import 'services/physical_activity_service.dart';
 import 'services/fitness_tracker_service.dart';
 import 'services/location_verification_service.dart';
+import 'services/agents/integration_orchestrator_agent.dart';
+import 'services/agents/character_management_agent.dart';
+import 'services/agents/fitness_tracking_agent.dart';
+import 'services/agents/battle_system_agent.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -21,10 +25,35 @@ void main() async {
     // Initialize SharedPreferences with error handling
     final prefs = await SharedPreferences.getInstance();
     
+    // Initialize the agent system
+    await _initializeAgentSystem();
+    
     runApp(RealmOfValorApp(prefs: prefs));
   } catch (e) {
     // Fallback to simple app if initialization fails
     runApp(const ErrorApp());
+  }
+}
+
+/// Initialize the agent system
+Future<void> _initializeAgentSystem() async {
+  try {
+    // Initialize the Integration Orchestrator
+    await AgentOrchestrator.initialize();
+    
+    // Initialize and register core agents
+    final characterAgent = CharacterManagementAgent();
+    final fitnessAgent = FitnessTrackingAgent();
+    final battleAgent = BattleSystemAgent();
+    
+    await AgentOrchestrator.instance.registerAgent(characterAgent);
+    await AgentOrchestrator.instance.registerAgent(fitnessAgent);
+    await AgentOrchestrator.instance.registerAgent(battleAgent);
+    
+    print('Agent system initialized successfully');
+  } catch (e) {
+    print('Failed to initialize agent system: $e');
+    // Continue without agent system for now
   }
 }
 
