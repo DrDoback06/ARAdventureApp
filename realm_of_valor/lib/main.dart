@@ -39,7 +39,7 @@ void main() async {
     final prefs = await SharedPreferences.getInstance();
     
     // Initialize the agent system
-    await _initializeAgentSystem();
+    await _initializeAgentSystem(prefs);
     
     runApp(RealmOfValorApp(prefs: prefs));
   } catch (e) {
@@ -49,7 +49,7 @@ void main() async {
 }
 
 /// Initialize the agent system
-Future<void> _initializeAgentSystem() async {
+Future<void> _initializeAgentSystem(SharedPreferences prefs) async {
   try {
     // Initialize the Integration Orchestrator
     await AgentOrchestrator.initialize();
