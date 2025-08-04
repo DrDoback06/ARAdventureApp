@@ -1,0 +1,30 @@
+# Audio Assets Placeholder
+
+This directory contains audio assets for the Realm of Valor app.
+
+## Required Sound Files:
+- card_lift.mp3
+- card_drop.mp3
+- spell_cast.mp3
+- spell_resolve.mp3
+- attack.mp3
+- critical_hit.mp3
+- super_critical.mp3
+- devastating_critical.mp3
+- level_up.mp3
+- victory.mp3
+- defeat.mp3
+- error.mp3
+- target_hover.mp3
+- button_click.mp3
+- menu_open.mp3
+- menu_close.mp3
+- item_found.mp3
+- quest_complete.mp3
+- achievement.mp3
+- background_music.mp3
+- ui_click.mp3
+
+## Note:
+For now, the audio service will use fallback sounds if these files are missing.
+In a production app, you would add actual audio files here. 

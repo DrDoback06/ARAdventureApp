@@ -1,0 +1,277 @@
+[
+  {
+    "id": "excalibur",
+    "name": "Excalibur, Blade of Kings",
+    "description": "A legendary sword that gleams with ancient power. +50 ATK, +20 DEF. Grants immunity to fear effects.",
+    "type": "weapon",
+    "rarity": "legendary",
+    "set": "ancients",
+    "cost": 12,
+    "attack": 50,
+    "defense": 20,
+    "health": 0,
+    "mana": 0,
+    "strength": 0,
+    "agility": 0,
+    "intelligence": 0,
+    "durability": 100,
+    "maxStack": 1,
+    "isConsumable": false,
+    "isTradeable": true,
+    "equipmentSlot": "weapon1",
+    "allowedClasses": ["holy", "arcane"],
+    "statModifiers": [
+      {
+        "statName": "attack",
+        "value": 50,
+        "isPercentage": false
+      },
+      {
+        "statName": "defense",
+        "value": 20,
+        "isPercentage": false
+      }
+    ],
+    "conditions": [
+      {
+        "conditionType": "level",
+        "conditionKey": "character_level",
+        "conditionValue": 10,
+        "operator": ">="
+      }
+    ],
+    "effects": [
+      {
+        "type": "immunity",
+        "value": "fear",
+        "duration": 0
+      },
+      {
+        "type": "bonus_xp",
+        "value": "25",
+        "duration": 0
+      }
+    ],
+    "imageUrl": "assets/cards/excalibur.png",
+    "physicalCardId": "PHYS_EXC_001",
+    "lore": "The legendary sword of King Arthur, said to have been forged by the Lady of the Lake herself. Only the pure of heart can wield its power.",
+    "tags": ["weapon", "sword", "legendary", "holy"],
+    "customProperties": {
+      "special_ability": "fear_immunity",
+      "quest_related": "arthurian_legend"
+    }
+  },
+  {
+    "id": "shadowfang_dagger",
+    "name": "Shadowfang Dagger",
+    "description": "Forged in the depths of shadow. +35 ATK, +15 AGI. Chance to inflict poison on critical hits.",
+    "type": "weapon",
+    "rarity": "epic",
+    "set": "shadows",
+    "cost": 8,
+    "attack": 35,
+    "defense": 0,
+    "health": 0,
+    "mana": 0,
+    "strength": 0,
+    "agility": 15,
+    "intelligence": 0,
+    "durability": 100,
+    "maxStack": 1,
+    "isConsumable": false,
+    "isTradeable": true,
+    "equipmentSlot": "weapon1",
+    "allowedClasses": ["chaos", "arcane"],
+    "statModifiers": [
+      {
+        "statName": "attack",
+        "value": 35,
+        "isPercentage": false
+      },
+      {
+        "statName": "agility",
+        "value": 15,
+        "isPercentage": false
+      }
+    ],
+    "conditions": [
+      {
+        "conditionType": "level",
+        "conditionKey": "character_level",
+        "conditionValue": 5,
+        "operator": ">="
+      }
+    ],
+    "effects": [
+      {
+        "type": "critical_poison",
+        "value": "30",
+        "duration": 0
+      },
+      {
+        "type": "stealth_bonus",
+        "value": "10",
+        "duration": 0
+      }
+    ],
+    "imageUrl": "assets/cards/shadowfang.png",
+    "physicalCardId": "PHYS_SHA_001",
+    "lore": "A dagger forged in the deepest shadows, its blade seems to drink in the light around it. Assassins prize this weapon for its deadly efficiency.",
+    "tags": ["weapon", "dagger", "stealth", "poison"],
+    "customProperties": {
+      "stealth_bonus": true,
+      "poison_chance": 0.3
+    }
+  },
+  {
+    "id": "meteor_storm",
+    "name": "Meteor Storm",
+    "description": "Rain fiery destruction from the heavens. Deals 80 damage to all enemies.",
+    "type": "spell",
+    "rarity": "legendary",
+    "set": "elements",
+    "cost": 10,
+    "attack": 80,
+    "defense": 0,
+    "health": 0,
+    "mana": 0,
+    "strength": 0,
+    "agility": 0,
+    "intelligence": 0,
+    "durability": 0,
+    "maxStack": 1,
+    "isConsumable": true,
+    "isTradeable": true,
+    "equipmentSlot": "none",
+    "allowedClasses": ["arcane", "chaos"],
+    "statModifiers": [],
+    "conditions": [
+      {
+        "conditionType": "level",
+        "conditionKey": "character_level",
+        "conditionValue": 15,
+        "operator": ">="
+      },
+      {
+        "conditionType": "stat",
+        "conditionKey": "intelligence",
+        "conditionValue": 25,
+        "operator": ">="
+      }
+    ],
+    "effects": [
+      {
+        "type": "area_damage",
+        "value": "all",
+        "duration": 0
+      },
+      {
+        "type": "burn",
+        "value": "3",
+        "duration": 3
+      }
+    ],
+    "imageUrl": "assets/cards/meteor.png",
+    "physicalCardId": "PHYS_MET_001",
+    "lore": "The most devastating fire spell known to mages. Summons meteors from the heavens to rain destruction upon all enemies.",
+    "tags": ["spell", "fire", "area", "legendary"],
+    "customProperties": {
+      "area_effect": true,
+      "fire_mastery_required": true
+    }
+  },
+  {
+    "id": "ancient_dragon",
+    "name": "Bahamut, The Ancient Dragon",
+    "description": "The most feared dragon in all the realms. Immense power and ancient wisdom.",
+    "type": "enemy",
+    "rarity": "mythic",
+    "set": "ancients",
+    "cost": 0,
+    "attack": 120,
+    "defense": 80,
+    "health": 500,
+    "mana": 0,
+    "strength": 0,
+    "agility": 0,
+    "intelligence": 0,
+    "durability": 0,
+    "maxStack": 1,
+    "isConsumable": false,
+    "isTradeable": false,
+    "equipmentSlot": "none",
+    "allowedClasses": ["all"],
+    "statModifiers": [],
+    "conditions": [],
+    "effects": [
+      {
+        "type": "breath_weapon",
+        "value": "100",
+        "duration": 0
+      },
+      {
+        "type": "fear_aura",
+        "value": "10",
+        "duration": 0
+      },
+      {
+        "type": "spell_immunity",
+        "value": "50",
+        "duration": 0
+      }
+    ],
+    "imageUrl": "assets/cards/ancient_dragon.png",
+    "physicalCardId": "PHYS_BAH_001",
+    "lore": "The oldest and most powerful dragon in existence. Bahamut has ruled the skies for millennia, and few who challenge him live to tell the tale.",
+    "tags": ["enemy", "dragon", "boss", "mythic"],
+    "customProperties": {
+      "boss_encounter": true,
+      "unique_enemy": true,
+      "quest_target": "dragon_slayer"
+    }
+  },
+  {
+    "id": "elixir_of_life",
+    "name": "Elixir of Eternal Life",
+    "description": "A legendary potion that extends life. Restore full HP and gain temporary invulnerability.",
+    "type": "consumable",
+    "rarity": "mythic",
+    "set": "ancients",
+    "cost": 20,
+    "attack": 0,
+    "defense": 0,
+    "health": 0,
+    "mana": 0,
+    "strength": 0,
+    "agility": 0,
+    "intelligence": 0,
+    "durability": 0,
+    "maxStack": 1,
+    "isConsumable": true,
+    "isTradeable": true,
+    "equipmentSlot": "none",
+    "allowedClasses": ["all"],
+    "statModifiers": [],
+    "conditions": [],
+    "effects": [
+      {
+        "type": "full_heal",
+        "value": "1",
+        "duration": 0
+      },
+      {
+        "type": "invulnerability",
+        "value": "5",
+        "duration": 5
+      }
+    ],
+    "imageUrl": "assets/cards/elixir_of_life.png",
+    "physicalCardId": "PHYS_ELI_001",
+    "lore": "The rarest of all potions, said to grant immortality to those who drink it. Only the most skilled alchemists can create this legendary elixir.",
+    "tags": ["consumable", "potion", "heal", "mythic"],
+    "customProperties": {
+      "unique_item": true,
+      "quest_reward": "alchemist_mastery"
+    }
+  }
+] 

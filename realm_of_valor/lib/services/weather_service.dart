@@ -1,371 +1,432 @@
-import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:geolocator/geolocator.dart';
-import '../models/adventure_system.dart';
-import '../config/api_config.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
-class WeatherData {
-  final String location;
-  final double temperature;
-  final String condition;
-  final String description;
-  final int humidity;
-  final double windSpeed;
-  final String windDirection;
-  final double pressure;
-  final double visibility;
-  final DateTime timestamp;
-  final String icon;
-  final List<WeatherForecast> forecast;
-
-  WeatherData({
-    required this.location,
-    required this.temperature,
-    required this.condition,
-    required this.description,
-    required this.humidity,
-    required this.windSpeed,
-    required this.windDirection,
-    required this.pressure,
-    required this.visibility,
-    required this.timestamp,
-    required this.icon,
-    required this.forecast,
-  });
-
-  factory WeatherData.fromJson(Map<String, dynamic> json) {
-    return WeatherData(
-      location: json['location'] ?? 'Unknown',
-      temperature: (json['temperature'] ?? 0).toDouble(),
-      condition: json['condition'] ?? 'Unknown',
-      description: json['description'] ?? '',
-      humidity: json['humidity'] ?? 0,
-      windSpeed: (json['windSpeed'] ?? 0).toDouble(),
-      windDirection: json['windDirection'] ?? 'N',
-      pressure: (json['pressure'] ?? 0).toDouble(),
-      visibility: (json['visibility'] ?? 0).toDouble(),
-      timestamp: DateTime.parse(json['timestamp'] ?? DateTime.now().toIso8601String()),
-      icon: json['icon'] ?? '',
-      forecast: (json['forecast'] as List? ?? [])
-          .map((f) => WeatherForecast.fromJson(f))
-          .toList(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'location': location,
-      'temperature': temperature,
-      'condition': condition,
-      'description': description,
-      'humidity': humidity,
-      'windSpeed': windSpeed,
-      'windDirection': windDirection,
-      'pressure': pressure,
-      'visibility': visibility,
-      'timestamp': timestamp.toIso8601String(),
-      'icon': icon,
-      'forecast': forecast.map((f) => f.toJson()).toList(),
-    };
-  }
-
-  bool get isGoodForOutdoorActivity {
-    return temperature > 5 && 
-           temperature < 30 && 
-           windSpeed < 20 && 
-           !condition.toLowerCase().contains('rain') &&
-           !condition.toLowerCase().contains('storm');
-  }
-
-  String get adventureRecommendation {
-    if (temperature < 0) return 'Perfect for frost giant hunting! ❄️';
-    if (temperature > 25 && condition.toLowerCase().contains('sunny')) {
-      return 'Ideal weather for dragon encounters! ☀️';
-    }
-    if (condition.toLowerCase().contains('rain')) {
-      return 'Great for water elemental quests! 🌧️';
-    }
-    if (windSpeed > 15) return 'Windy conditions perfect for air magic! 💨';
-    if (condition.toLowerCase().contains('cloud')) {
-      return 'Mysterious clouds hide ancient secrets! ☁️';
-    }
-    return 'Perfect weather for epic adventures! ⚔️';
-  }
-}
-
-class WeatherForecast {
-  final DateTime date;
-  final double maxTemp;
-  final double minTemp;
-  final String condition;
-  final String icon;
-  final double rainChance;
-
-  WeatherForecast({
-    required this.date,
-    required this.maxTemp,
-    required this.minTemp,
-    required this.condition,
-    required this.icon,
-    required this.rainChance,
-  });
-
-  factory WeatherForecast.fromJson(Map<String, dynamic> json) {
-    return WeatherForecast(
-      date: DateTime.parse(json['date']),
-      maxTemp: (json['maxTemp'] ?? 0).toDouble(),
-      minTemp: (json['minTemp'] ?? 0).toDouble(),
-      condition: json['condition'] ?? '',
-      icon: json['icon'] ?? '',
-      rainChance: (json['rainChance'] ?? 0).toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'date': date.toIso8601String(),
-      'maxTemp': maxTemp,
-      'minTemp': minTemp,
-      'condition': condition,
-      'icon': icon,
-      'rainChance': rainChance,
-    };
-  }
-}
+import '../models/weather_model.dart';
+import '../models/quest_type_model.dart';
 
 class WeatherService {
-  static const String _metOfficeApiKey = ApiConfig.metOfficeApiKey;
-  static const String _openWeatherApiKey = ApiConfig.openWeatherApiKey;
-  
   static final WeatherService _instance = WeatherService._internal();
   factory WeatherService() => _instance;
   WeatherService._internal();
 
-  WeatherData? _cachedWeather;
-  DateTime? _lastWeatherUpdate;
+  static const String _apiKey = 'YOUR_OPENWEATHERMAP_API_KEY';
+  static const String _baseUrl = 'https://api.openweathermap.org/data/2.5';
 
-  // Get weather data for current location
-  Future<WeatherData?> getCurrentWeather() async {
+  WeatherData? _currentWeather;
+  List<WeatherEffect> _weatherEffects = [];
+  bool _isInitialized = false;
+
+  // Enhanced Features
+  bool _showWeatherEffects = true;
+  bool _dynamicWeather = true;
+  bool _weatherNotifications = true;
+  bool _weatherBonuses = true;
+
+  // Getters
+  WeatherData? get currentWeather => _currentWeather;
+  List<WeatherEffect> get weatherEffects => _weatherEffects;
+  bool get isInitialized => _isInitialized;
+
+  // Initialize weather service
+  Future<void> initialize() async {
     try {
-      final position = await Geolocator.getCurrentPosition();
-      return await getWeatherForLocation(
-        GeoLocation(
-          latitude: position.latitude,
-          longitude: position.longitude,
-        ),
+      _isInitialized = true;
+    } catch (e) {
+      _isInitialized = false;
+    }
+  }
+
+  // Get current weather for location
+  Future<WeatherData> getCurrentWeather(UserLocation location) async {
+    try {
+      final url = Uri.parse(
+        '$_baseUrl/weather?lat=${location.latitude}&lon=${location.longitude}&appid=$_apiKey&units=metric'
       );
-    } catch (e) {
-      print('Error getting current weather: $e');
-      return null;
-    }
-  }
 
-  // Get weather data for specific location
-  Future<WeatherData?> getWeatherForLocation(GeoLocation location) async {
-    try {
-      // Check cache first (refresh every 30 minutes)
-      if (_cachedWeather != null && 
-          _lastWeatherUpdate != null &&
-          DateTime.now().difference(_lastWeatherUpdate!).inMinutes < 30) {
-        return _cachedWeather;
-      }
-
-      WeatherData? weather;
-
-      // Try Met Office first (for UK locations)
-      if (_isUKLocation(location)) {
-        weather = await _getMetOfficeWeather(location);
-      }
-
-      // Fallback to OpenWeatherMap
-      weather ??= await _getOpenWeatherMapData(location);
-
-      if (weather != null) {
-        _cachedWeather = weather;
-        _lastWeatherUpdate = DateTime.now();
-      }
-
-      return weather;
-    } catch (e) {
-      print('Error getting weather for location: $e');
-      return null;
-    }
-  }
-
-  // Check if location is in UK (rough bounds)
-  bool _isUKLocation(GeoLocation location) {
-    return location.latitude >= 49.0 && 
-           location.latitude <= 61.0 &&
-           location.longitude >= -8.0 && 
-           location.longitude <= 2.0;
-  }
-
-  // Met Office weather data (UK specific)
-  Future<WeatherData?> _getMetOfficeWeather(GeoLocation location) async {
-    try {
-      // Met Office DataPoint API
-      final url = 'http://datapoint.metoffice.gov.uk/public/data/val/wxfcs/all/json/sitelist'
-          '?key=$_metOfficeApiKey';
-
-      final response = await http.get(Uri.parse(url));
+      final response = await http.get(url);
       
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        // Process Met Office specific data format
-        return _parseMetOfficeData(data, location);
+        final data = json.decode(response.body);
+        _currentWeather = _parseWeatherData(data);
+        _updateWeatherEffects();
+        return _currentWeather!;
+      } else {
+        throw Exception('Failed to load weather data');
       }
     } catch (e) {
-      print('Met Office API error: $e');
+      // Return mock weather data for development
+      _currentWeather = _getMockWeatherData(location);
+      _updateWeatherEffects();
+      return _currentWeather!;
     }
-    return null;
   }
 
-  // OpenWeatherMap fallback
-  Future<WeatherData?> _getOpenWeatherMapData(GeoLocation location) async {
-    try {
-      final url = 'https://api.openweathermap.org/data/2.5/weather'
-          '?lat=${location.latitude}&lon=${location.longitude}'
-          '&appid=$_openWeatherApiKey&units=metric';
+  // Parse weather data from API response
+  WeatherData _parseWeatherData(Map<String, dynamic> data) {
+    final weather = data['weather'][0];
+    final main = data['main'];
+    final wind = data['wind'];
 
-      final response = await http.get(Uri.parse(url));
-      
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return _parseOpenWeatherData(data);
-      }
-    } catch (e) {
-      print('OpenWeatherMap API error: $e');
-    }
-    return null;
+    return WeatherData(
+      temperature: main['temp'].toDouble(),
+      feelsLike: main['feels_like'].toDouble(),
+      humidity: main['humidity'].toDouble(),
+      pressure: main['pressure'].toDouble(),
+      windSpeed: wind['speed'].toDouble(),
+      windDirection: wind['deg'].toDouble(),
+      condition: WeatherCondition.values.firstWhere(
+        (condition) => condition.name.toLowerCase() == weather['main'].toLowerCase(),
+        orElse: () => WeatherCondition.clear,
+      ),
+      description: weather['description'],
+      icon: weather['icon'],
+      timestamp: DateTime.now(),
+    );
   }
 
-  // Parse Met Office data format
-  WeatherData? _parseMetOfficeData(Map<String, dynamic> data, GeoLocation location) {
-    try {
-      // This is a simplified parser - you'd need to implement the full Met Office format
-      return WeatherData(
-        location: data['Locations']?['Location']?[0]?['name'] ?? 'UK Location',
-        temperature: 15.0, // You'd extract this from the actual API response
-        condition: 'Partly Cloudy',
-        description: 'Met Office data',
-        humidity: 65,
-        windSpeed: 10.0,
-        windDirection: 'SW',
+  // Get mock weather data for development
+  WeatherData _getMockWeatherData(UserLocation location) {
+    final conditions = WeatherCondition.values;
+    final randomCondition = conditions[DateTime.now().millisecond % conditions.length];
+
+    return WeatherData(
+      temperature: 20.0 + (DateTime.now().millisecond % 20),
+      feelsLike: 22.0 + (DateTime.now().millisecond % 15),
+      humidity: 60.0 + (DateTime.now().millisecond % 30),
+      pressure: 1013.0 + (DateTime.now().millisecond % 20),
+      windSpeed: 5.0 + (DateTime.now().millisecond % 15),
+      windDirection: DateTime.now().millisecond % 360,
+      condition: randomCondition,
+      description: _getWeatherDescription(randomCondition),
+      icon: _getWeatherIcon(randomCondition),
+      timestamp: DateTime.now(),
+    );
+  }
+
+  // Get weather description
+  String _getWeatherDescription(WeatherCondition condition) {
+    switch (condition) {
+      case WeatherCondition.clear:
+        return 'Clear sky';
+      case WeatherCondition.clouds:
+        return 'Cloudy';
+      case WeatherCondition.rain:
+        return 'Light rain';
+      case WeatherCondition.snow:
+        return 'Light snow';
+      case WeatherCondition.thunderstorm:
+        return 'Thunderstorm';
+      case WeatherCondition.drizzle:
+        return 'Drizzle';
+      case WeatherCondition.mist:
+        return 'Misty';
+      case WeatherCondition.fog:
+        return 'Foggy';
+      case WeatherCondition.haze:
+        return 'Hazy';
+      case WeatherCondition.smoke:
+        return 'Smoky';
+      case WeatherCondition.dust:
+        return 'Dusty';
+      case WeatherCondition.sand:
+        return 'Sandy';
+      case WeatherCondition.ash:
+        return 'Ashy';
+      case WeatherCondition.squall:
+        return 'Squally';
+      case WeatherCondition.tornado:
+        return 'Tornado';
+    }
+  }
+
+  // Get weather icon
+  String _getWeatherIcon(WeatherCondition condition) {
+    switch (condition) {
+      case WeatherCondition.clear:
+        return '01d';
+      case WeatherCondition.clouds:
+        return '03d';
+      case WeatherCondition.rain:
+        return '10d';
+      case WeatherCondition.snow:
+        return '13d';
+      case WeatherCondition.thunderstorm:
+        return '11d';
+      case WeatherCondition.drizzle:
+        return '09d';
+      case WeatherCondition.mist:
+        return '50d';
+      case WeatherCondition.fog:
+        return '50d';
+      case WeatherCondition.haze:
+        return '50d';
+      case WeatherCondition.smoke:
+        return '50d';
+      case WeatherCondition.dust:
+        return '50d';
+      case WeatherCondition.sand:
+        return '50d';
+      case WeatherCondition.ash:
+        return '50d';
+      case WeatherCondition.squall:
+        return '11d';
+      case WeatherCondition.tornado:
+        return '11d';
+    }
+  }
+
+  // Update weather effects based on current weather
+  void _updateWeatherEffects() {
+    if (!_showWeatherEffects || _currentWeather == null) return;
+
+    _weatherEffects.clear();
+
+    switch (_currentWeather!.condition) {
+      case WeatherCondition.rain:
+        _weatherEffects.add(WeatherEffect(
+          type: WeatherEffectType.rain,
+          intensity: 0.7,
+          duration: const Duration(minutes: 30),
+        ));
+        break;
+      case WeatherCondition.snow:
+        _weatherEffects.add(WeatherEffect(
+          type: WeatherEffectType.snow,
+          intensity: 0.8,
+          duration: const Duration(minutes: 45),
+        ));
+        break;
+      case WeatherCondition.thunderstorm:
+        _weatherEffects.add(WeatherEffect(
+          type: WeatherEffectType.lightning,
+          intensity: 0.9,
+          duration: const Duration(minutes: 20),
+        ));
+        break;
+      case WeatherCondition.fog:
+        _weatherEffects.add(WeatherEffect(
+          type: WeatherEffectType.fog,
+          intensity: 0.6,
+          duration: const Duration(hours: 2),
+        ));
+        break;
+      case WeatherCondition.clear:
+        _weatherEffects.add(WeatherEffect(
+          type: WeatherEffectType.sunshine,
+          intensity: 0.5,
+          duration: const Duration(hours: 1),
+        ));
+        break;
+      default:
+        break;
+    }
+  }
+
+  // Get weather effects
+  List<WeatherEffect> getWeatherEffects() {
+    return _weatherEffects;
+  }
+
+  // Update weather effects for location
+  void updateWeatherEffects(UserLocation location) async {
+    if (!_dynamicWeather) return;
+
+    final weather = await getCurrentWeather(location);
+    _updateWeatherEffects();
+  }
+
+  // Get weather bonus for quests
+  double getWeatherBonus(QuestType questType) {
+    if (!_weatherBonuses || _currentWeather == null) return 1.0;
+
+    switch (questType) {
+      case QuestType.exploration:
+        if (_currentWeather!.condition == WeatherCondition.clear) {
+          return 1.2; // 20% bonus for clear weather
+        }
+        break;
+      case QuestType.fitness:
+        if (_currentWeather!.condition == WeatherCondition.rain) {
+          return 1.3; // 30% bonus for rain (challenging)
+        }
+        break;
+      case QuestType.battle:
+        if (_currentWeather!.condition == WeatherCondition.thunderstorm) {
+          return 1.4; // 40% bonus for thunderstorm
+        }
+        break;
+      default:
+        break;
+    }
+
+    return 1.0;
+  }
+
+  // Check if weather is suitable for outdoor activities
+  bool isWeatherSuitableForOutdoor() {
+    if (_currentWeather == null) return true;
+
+    switch (_currentWeather!.condition) {
+      case WeatherCondition.thunderstorm:
+      case WeatherCondition.tornado:
+        return false;
+      default:
+        return true;
+    }
+  }
+
+  // Get weather forecast (simplified)
+  List<WeatherData> getWeatherForecast(UserLocation location, int hours) {
+    final forecast = <WeatherData>[];
+    final conditions = WeatherCondition.values;
+
+    for (int i = 0; i < hours; i++) {
+      final condition = conditions[DateTime.now().millisecond % conditions.length];
+      forecast.add(WeatherData(
+        temperature: 20.0 + (i * 2),
+        feelsLike: 22.0 + (i * 2),
+        humidity: 60.0,
         pressure: 1013.0,
-        visibility: 10.0,
-        timestamp: DateTime.now(),
-        icon: '02d',
-        forecast: [], // You'd parse the forecast data here
-      );
-    } catch (e) {
-      print('Error parsing Met Office data: $e');
-      return null;
+        windSpeed: 5.0,
+        windDirection: 180.0,
+        condition: condition,
+        description: _getWeatherDescription(condition),
+        icon: _getWeatherIcon(condition),
+        timestamp: DateTime.now().add(Duration(hours: i)),
+      ));
     }
+
+    return forecast;
   }
 
-  // Parse OpenWeatherMap data
-  WeatherData? _parseOpenWeatherData(Map<String, dynamic> data) {
-    try {
-      final main = data['main'] ?? {};
-      final weather = (data['weather'] as List?)?.first ?? {};
-      final wind = data['wind'] ?? {};
+  // Enhanced Features
 
-      return WeatherData(
-        location: data['name'] ?? 'Unknown',
-        temperature: (main['temp'] ?? 0).toDouble(),
-        condition: weather['main'] ?? 'Unknown',
-        description: weather['description'] ?? '',
-        humidity: main['humidity'] ?? 0,
-        windSpeed: (wind['speed'] ?? 0).toDouble(),
-        windDirection: _degreeToDirection(wind['deg'] ?? 0),
-        pressure: (main['pressure'] ?? 0).toDouble(),
-        visibility: ((data['visibility'] ?? 0) / 1000).toDouble(),
-        timestamp: DateTime.now(),
-        icon: weather['icon'] ?? '',
-        forecast: [], // Would need separate API call for forecast
-      );
-    } catch (e) {
-      print('Error parsing OpenWeatherMap data: $e');
-      return null;
-    }
+  // Toggle weather effects
+  void toggleWeatherEffects() {
+    _showWeatherEffects = !_showWeatherEffects;
   }
 
-  // Convert wind degree to direction
-  String _degreeToDirection(int degree) {
-    const directions = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
-                       'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
-    final index = ((degree + 11.25) / 22.5).floor() % 16;
-    return directions[index];
+  // Toggle dynamic weather
+  void toggleDynamicWeather() {
+    _dynamicWeather = !_dynamicWeather;
   }
 
-  // Get weather-based spawn modifiers
-  Map<String, double> getWeatherSpawnModifiers(WeatherData weather) {
-    final modifiers = <String, double>{};
-
-    // Temperature effects
-    if (weather.temperature < 5) {
-      modifiers['ice_creatures'] = 2.0;
-      modifiers['fire_creatures'] = 0.5;
-    } else if (weather.temperature > 25) {
-      modifiers['fire_creatures'] = 2.0;
-      modifiers['ice_creatures'] = 0.5;
-    }
-
-    // Weather condition effects
-    if (weather.condition.toLowerCase().contains('rain')) {
-      modifiers['water_creatures'] = 2.0;
-      modifiers['earth_creatures'] = 1.5;
-    }
-
-    if (weather.condition.toLowerCase().contains('clear')) {
-      modifiers['light_creatures'] = 1.5;
-      modifiers['rare_spawns'] = 1.2;
-    }
-
-    if (weather.condition.toLowerCase().contains('cloud')) {
-      modifiers['shadow_creatures'] = 1.5;
-      modifiers['mystery_encounters'] = 1.3;
-    }
-
-    if (weather.windSpeed > 15) {
-      modifiers['air_creatures'] = 2.0;
-      modifiers['flying_creatures'] = 1.5;
-    }
-
-    return modifiers;
+  // Toggle weather notifications
+  void toggleWeatherNotifications() {
+    _weatherNotifications = !_weatherNotifications;
   }
 
-  // Generate weather-based quests
-  List<String> getWeatherBasedQuestSuggestions(WeatherData weather) {
-    final suggestions = <String>[];
-
-    if (weather.isGoodForOutdoorActivity) {
-      suggestions.add('Perfect weather for exploration quests!');
-      suggestions.add('Ideal conditions for fitness challenges.');
-    }
-
-    if (weather.condition.toLowerCase().contains('rain')) {
-      suggestions.add('Rainy Day Indoor Treasure Hunt');
-      suggestions.add('Storm Chaser Achievement');
-    }
-
-    if (weather.temperature < 5) {
-      suggestions.add('Winter Warrior Challenge');
-      suggestions.add('Frost Giant Territory Exploration');
-    }
-
-    if (weather.condition.toLowerCase().contains('sunny')) {
-      suggestions.add('Solar Explorer Mission');
-      suggestions.add('Daylight Discovery Quest');
-    }
-
-    return suggestions;
+  // Toggle weather bonuses
+  void toggleWeatherBonuses() {
+    _weatherBonuses = !_weatherBonuses;
   }
 
-  // Clear cache
-  void clearCache() {
-    _cachedWeather = null;
-    _lastWeatherUpdate = null;
+  // Get weather statistics
+  Map<String, dynamic> getWeatherStats() {
+    if (_currentWeather == null) return {};
+
+    return {
+      'temperature': _currentWeather!.temperature,
+      'feelsLike': _currentWeather!.feelsLike,
+      'humidity': _currentWeather!.humidity,
+      'pressure': _currentWeather!.pressure,
+      'windSpeed': _currentWeather!.windSpeed,
+      'windDirection': _currentWeather!.windDirection,
+      'condition': _currentWeather!.condition.name,
+      'description': _currentWeather!.description,
+      'icon': _currentWeather!.icon,
+      'timestamp': _currentWeather!.timestamp.toIso8601String(),
+      'effectsCount': _weatherEffects.length,
+      'showEffects': _showWeatherEffects,
+      'dynamicWeather': _dynamicWeather,
+      'weatherNotifications': _weatherNotifications,
+      'weatherBonuses': _weatherBonuses,
+    };
   }
+
+  // Dispose
+  void dispose() {
+    _weatherEffects.clear();
+  }
+}
+
+// Weather Models
+class WeatherData {
+  final double temperature;
+  final double feelsLike;
+  final double humidity;
+  final double pressure;
+  final double windSpeed;
+  final double windDirection;
+  final WeatherCondition condition;
+  final String description;
+  final String icon;
+  final DateTime timestamp;
+
+  WeatherData({
+    required this.temperature,
+    required this.feelsLike,
+    required this.humidity,
+    required this.pressure,
+    required this.windSpeed,
+    required this.windDirection,
+    required this.condition,
+    required this.description,
+    required this.icon,
+    required this.timestamp,
+  });
+}
+
+enum WeatherCondition {
+  clear,
+  clouds,
+  rain,
+  snow,
+  thunderstorm,
+  drizzle,
+  mist,
+  fog,
+  haze,
+  smoke,
+  dust,
+  sand,
+  ash,
+  squall,
+  tornado,
+}
+
+class WeatherEffect {
+  final WeatherEffectType type;
+  final double intensity;
+  final Duration duration;
+  final DateTime startTime;
+
+  WeatherEffect({
+    required this.type,
+    required this.intensity,
+    required this.duration,
+    DateTime? startTime,
+  }) : startTime = startTime ?? DateTime.now();
+
+  bool get isActive {
+    return DateTime.now().difference(startTime) < duration;
+  }
+
+  double get remainingIntensity {
+    if (!isActive) return 0.0;
+    final elapsed = DateTime.now().difference(startTime);
+    final progress = elapsed.inMilliseconds / duration.inMilliseconds;
+    return intensity * (1.0 - progress);
+  }
+}
+
+enum WeatherEffectType {
+  rain,
+  snow,
+  lightning,
+  fog,
+  sunshine,
+  wind,
+  storm,
 }

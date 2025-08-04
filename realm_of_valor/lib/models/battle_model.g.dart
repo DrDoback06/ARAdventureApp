@@ -14,6 +14,8 @@ ActionCard _$ActionCardFromJson(Map<String, dynamic> json) => ActionCard(
       effect: json['effect'] as String,
       cost: (json['cost'] as num?)?.toInt() ?? 0,
       physicalRequirement: json['physicalRequirement'] as String? ?? '',
+      rarity: $enumDecodeNullable(_$CardRarityEnumMap, json['rarity']) ??
+          CardRarity.common,
       properties: json['properties'] as Map<String, dynamic>?,
     );
 
@@ -26,6 +28,7 @@ Map<String, dynamic> _$ActionCardToJson(ActionCard instance) =>
       'effect': instance.effect,
       'cost': instance.cost,
       'physicalRequirement': instance.physicalRequirement,
+      'rarity': _$CardRarityEnumMap[instance.rarity]!,
       'properties': instance.properties,
     };
 
@@ -38,6 +41,20 @@ const _$ActionCardTypeEnumMap = {
   ActionCardType.counter: 'counter',
   ActionCardType.special: 'special',
   ActionCardType.physical: 'physical',
+  ActionCardType.spell: 'spell',
+  ActionCardType.support: 'support',
+};
+
+const _$CardRarityEnumMap = {
+  CardRarity.common: 'common',
+  CardRarity.uncommon: 'uncommon',
+  CardRarity.rare: 'rare',
+  CardRarity.epic: 'epic',
+  CardRarity.legendary: 'legendary',
+  CardRarity.mythic: 'mythic',
+  CardRarity.holographic: 'holographic',
+  CardRarity.firstEdition: 'firstEdition',
+  CardRarity.limitedEdition: 'limitedEdition',
 };
 
 BattlePlayer _$BattlePlayerFromJson(Map<String, dynamic> json) => BattlePlayer(
@@ -189,15 +206,3 @@ Map<String, dynamic> _$EnemyCardToJson(EnemyCard instance) => <String, dynamic>{
       'rarity': _$CardRarityEnumMap[instance.rarity]!,
       'battleActions': instance.battleActions,
     };
-
-const _$CardRarityEnumMap = {
-  CardRarity.common: 'common',
-  CardRarity.uncommon: 'uncommon',
-  CardRarity.rare: 'rare',
-  CardRarity.epic: 'epic',
-  CardRarity.legendary: 'legendary',
-  CardRarity.mythic: 'mythic',
-  CardRarity.holographic: 'holographic',
-  CardRarity.firstEdition: 'firstEdition',
-  CardRarity.limitedEdition: 'limitedEdition',
-};

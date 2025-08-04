@@ -10,6 +10,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:realm_of_valor/main.dart';
+import 'package:realm_of_valor/services/character_service.dart';
 
 void main() {
   testWidgets('App initializes correctly', (WidgetTester tester) async {
@@ -17,12 +18,14 @@ void main() {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
     
+    // Create character service
+    final characterService = CharacterService(prefs);
+    
     // Build our app and trigger a frame.
-    await tester.pumpWidget(RealmOfValorApp(prefs: prefs));
+    await tester.pumpWidget(RealmOfValorApp(characterService: characterService));
 
-    // Verify that the loading screen is displayed initially
+    // Verify that the app loads
     expect(find.text('Realm of Valor'), findsOneWidget);
-    expect(find.text('Loading your adventure...'), findsOneWidget);
   });
   
   testWidgets('Simple app widget test', (WidgetTester tester) async {

@@ -6,10 +6,12 @@ class ApiConfig {
   // Strava Integration - Get from developers.strava.com
   static const String stravaClientId = '167388';
   static const String stravaClientSecret = '61689135684e7ca1668a49623ab31b493580f0ad';
+  static const String stravaAccessToken = '1306858f83dbd28f251d09885d50848a86563f39';
+  static const String stravaRefreshToken = 'r1bfc173f9abb911f201901e92b099fa6bf3b31ea';
   static const String stravaRedirectUri = 'com.realmofvalor.app://auth';
   
   // Google Maps (add if needed)
-  static const String googleMapsApiKey = 'AIzaSyBCqY6PEv_VjNmDdpzD8JmtWX56V75ZYJY';
+  static const String googleMapsApiKey = 'AIzaSyBJoOf8e7Lw2fiFoTY3etNTTkBu-JKhOQQ';
   
   // Trail/Hiking APIs - Choose one or multiple
   // Option 1: Hiking Project API (by REI) - FREE with registration

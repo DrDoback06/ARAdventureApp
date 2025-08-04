@@ -28,6 +28,8 @@ enum ActionCardType {
   counter,
   special,
   physical,
+  spell,
+  support,
 }
 
 @JsonSerializable()
@@ -39,6 +41,7 @@ class ActionCard {
   final String effect;
   final int cost;
   final String physicalRequirement;
+  final CardRarity rarity;
   final Map<String, dynamic> properties;
 
   ActionCard({
@@ -49,6 +52,7 @@ class ActionCard {
     required this.effect,
     this.cost = 0,
     this.physicalRequirement = '',
+    this.rarity = CardRarity.common,
     Map<String, dynamic>? properties,
   })  : id = id ?? const Uuid().v4(),
         properties = properties ?? <String, dynamic>{};
@@ -323,4 +327,107 @@ class EnemyCard {
   factory EnemyCard.fromJson(Map<String, dynamic> json) =>
       _$EnemyCardFromJson(json);
   Map<String, dynamic> toJson() => _$EnemyCardToJson(this);
+}
+
+class AttackCard extends ActionCard {
+  final int baseDamage;
+  final String characterId;
+  final Map<String, int> damageModifiers; // equipment, buffs, etc.
+  
+  AttackCard({
+    required String characterId,
+    required int baseDamage,
+    Map<String, int>? damageModifiers,
+    String? id,
+  }) : baseDamage = baseDamage,
+       characterId = characterId,
+       damageModifiers = damageModifiers ?? <String, int>{},
+       super(
+         id: id,
+         name: 'Attack',
+         description: 'Basic physical attack',
+         type: ActionCardType.damage,
+         effect: 'physical_attack',
+         cost: 0,
+         rarity: CardRarity.common,
+       );
+
+  int get totalDamage {
+    int total = baseDamage;
+    damageModifiers.forEach((key, value) {
+      total += value;
+    });
+    return total;
+  }
+
+  // TODO: Add JSON serialization when build_runner is available
+  // factory AttackCard.fromJson(Map<String, dynamic> json) =>
+  //     _$AttackCardFromJson(json);
+  // Map<String, dynamic> toJson() => _$AttackCardToJson(this);
+}
+
+class SkillCard extends ActionCard {
+  final String skillId;
+  final String characterId;
+  final int baseManaCost;
+  final int baseDamage;
+  final String skillType; // 'active', 'passive', 'ultimate'
+  final int cooldown;
+  final int currentCooldown;
+  final Map<String, int> skillModifiers;
+  
+  SkillCard({
+    required String skillId,
+    required String characterId,
+    required String name,
+    required String description,
+    required int baseManaCost,
+    required int baseDamage,
+    required String skillType,
+    this.cooldown = 0,
+    this.currentCooldown = 0,
+    Map<String, int>? skillModifiers,
+    String? id,
+  }) : skillId = skillId,
+       characterId = characterId,
+       baseManaCost = baseManaCost,
+       baseDamage = baseDamage,
+       skillType = skillType,
+       skillModifiers = skillModifiers ?? <String, int>{},
+       super(
+         id: id,
+         name: name,
+         description: description,
+         type: ActionCardType.spell,
+         effect: 'skill_${skillType}',
+         cost: baseManaCost,
+         rarity: CardRarity.rare,
+       );
+
+  int get totalManaCost {
+    int total = baseManaCost;
+    skillModifiers.forEach((key, value) {
+      if (key.startsWith('mana_')) {
+        total += value;
+      }
+    });
+    return total;
+  }
+
+  int get totalDamage {
+    int total = baseDamage;
+    skillModifiers.forEach((key, value) {
+      if (key.startsWith('damage_')) {
+        total += value;
+      }
+    });
+    return total;
+  }
+
+  bool get isOnCooldown => currentCooldown > 0;
+
+  // TODO: Add JSON serialization when build_runner is available
+  // factory SkillCard.fromJson(Map<String, dynamic> json) =>
+  //     _$SkillCardFromJson(json);
+  // Map<String, dynamic> toJson() => _$SkillCardToJson(this);
 }

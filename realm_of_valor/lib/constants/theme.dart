@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/card_model.dart';
+import '../models/card_model.dart' show CardRarity;
 
 class RealmOfValorTheme {
   // Primary Colors - Dark whimsical theme

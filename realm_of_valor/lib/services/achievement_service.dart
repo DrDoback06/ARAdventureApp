@@ -1,856 +1,659 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/adventure_system.dart';
-import 'adventure_progression_service.dart';
+import '../models/character_model.dart';
+import '../providers/character_provider.dart';
 
 enum AchievementCategory {
+  battle,
   exploration,
-  fitness,
-  social,
-  seasonal,
-  special,
-  milestone,
   collection,
-  combat,
+  social,
+  fitness,
+  progression,
+  special,
 }
 
 enum AchievementRarity {
   common,
-  uncommon,
   rare,
   epic,
   legendary,
-  mythic,
+}
+
+enum AchievementTier {
+  bronze,
+  silver,
+  gold,
+  platinum,
 }
 
 class Achievement {
   final String id;
-  final String name;
+  final String title;
   final String description;
   final AchievementCategory category;
   final AchievementRarity rarity;
-  final Map<String, dynamic> requirements;
-  final Map<String, dynamic> progress;
+  final AchievementTier tier;
+  final int requiredProgress;
   final Map<String, dynamic> rewards;
-  final String iconPath;
-  final bool isHidden;
-  final bool isCompleted;
-  final DateTime? completedAt;
-  final List<String> prerequisites;
-  final int maxProgress;
-  final bool isRepeatable;
+  final DateTime? unlockedAt;
+  final String? icon;
 
-  Achievement({
+  const Achievement({
     required this.id,
-    required this.name,
+    required this.title,
     required this.description,
     required this.category,
     required this.rarity,
-    required this.requirements,
-    Map<String, dynamic>? progress,
+    required this.tier,
+    required this.requiredProgress,
     required this.rewards,
-    required this.iconPath,
-    this.isHidden = false,
-    this.isCompleted = false,
-    this.completedAt,
-    List<String>? prerequisites,
-    this.maxProgress = 1,
-    this.isRepeatable = false,
-  }) : progress = progress ?? {},
-       prerequisites = prerequisites ?? [];
-
-  factory Achievement.fromJson(Map<String, dynamic> json) {
-    return Achievement(
-      id: json['id'],
-      name: json['name'],
-      description: json['description'],
-      category: AchievementCategory.values[json['category'] ?? 0],
-      rarity: AchievementRarity.values[json['rarity'] ?? 0],
-      requirements: Map<String, dynamic>.from(json['requirements']),
-      progress: Map<String, dynamic>.from(json['progress'] ?? {}),
-      rewards: Map<String, dynamic>.from(json['rewards']),
-      iconPath: json['iconPath'],
-      isHidden: json['isHidden'] ?? false,
-      isCompleted: json['isCompleted'] ?? false,
-      completedAt: json['completedAt'] != null 
-          ? DateTime.parse(json['completedAt'])
-          : null,
-      prerequisites: List<String>.from(json['prerequisites'] ?? []),
-      maxProgress: json['maxProgress'] ?? 1,
-      isRepeatable: json['isRepeatable'] ?? false,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'category': category.index,
-      'rarity': rarity.index,
-      'requirements': requirements,
-      'progress': progress,
-      'rewards': rewards,
-      'iconPath': iconPath,
-      'isHidden': isHidden,
-      'isCompleted': isCompleted,
-      'completedAt': completedAt?.toIso8601String(),
-      'prerequisites': prerequisites,
-      'maxProgress': maxProgress,
-      'isRepeatable': isRepeatable,
-    };
-  }
-
-  double get progressPercentage {
-    if (maxProgress <= 1) return isCompleted ? 100.0 : 0.0;
-    
-    final currentProgress = progress.values.fold<num>(0, (sum, value) {
-      if (value is num) return sum + value;
-      return sum;
-    });
-    
-    return (currentProgress / maxProgress * 100).clamp(0.0, 100.0);
-  }
+    this.unlockedAt,
+    this.icon,
+  });
 
   Achievement copyWith({
-    Map<String, dynamic>? progress,
-    bool? isCompleted,
-    DateTime? completedAt,
+    DateTime? unlockedAt,
   }) {
     return Achievement(
       id: id,
-      name: name,
+      title: title,
       description: description,
       category: category,
       rarity: rarity,
-      requirements: requirements,
-      progress: progress ?? this.progress,
+      tier: tier,
+      requiredProgress: requiredProgress,
       rewards: rewards,
-      iconPath: iconPath,
-      isHidden: isHidden,
-      isCompleted: isCompleted ?? this.isCompleted,
-      completedAt: completedAt ?? this.completedAt,
-      prerequisites: prerequisites,
-      maxProgress: maxProgress,
-      isRepeatable: isRepeatable,
-    );
-  }
-}
-
-class Badge {
-  final String id;
-  final String name;
-  final String description;
-  final String iconPath;
-  final AchievementRarity rarity;
-  final DateTime earnedAt;
-  final String earnedFor;
-  final Map<String, dynamic> metadata;
-
-  Badge({
-    required this.id,
-    required this.name,
-    required this.description,
-    required this.iconPath,
-    required this.rarity,
-    required this.earnedAt,
-    required this.earnedFor,
-    Map<String, dynamic>? metadata,
-  }) : metadata = metadata ?? {};
-
-  factory Badge.fromJson(Map<String, dynamic> json) {
-    return Badge(
-      id: json['id'],
-      name: json['name'],
-      description: json['description'],
-      iconPath: json['iconPath'],
-      rarity: AchievementRarity.values[json['rarity'] ?? 0],
-      earnedAt: DateTime.parse(json['earnedAt']),
-      earnedFor: json['earnedFor'],
-      metadata: Map<String, dynamic>.from(json['metadata'] ?? {}),
+      unlockedAt: unlockedAt ?? this.unlockedAt,
+      icon: icon,
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
+      'title': title,
       'description': description,
-      'iconPath': iconPath,
-      'rarity': rarity.index,
-      'earnedAt': earnedAt.toIso8601String(),
-      'earnedFor': earnedFor,
-      'metadata': metadata,
+      'category': category.name,
+      'rarity': rarity.name,
+      'tier': tier.name,
+      'requiredProgress': requiredProgress,
+      'rewards': rewards,
+      'unlockedAt': unlockedAt?.millisecondsSinceEpoch,
+      'icon': icon,
     };
+  }
+
+  factory Achievement.fromJson(Map<String, dynamic> json) {
+    return Achievement(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      description: json['description'] as String,
+      category: AchievementCategory.values.firstWhere(
+        (e) => e.name == json['category'],
+      ),
+      rarity: AchievementRarity.values.firstWhere(
+        (e) => e.name == json['rarity'],
+      ),
+      tier: AchievementTier.values.firstWhere(
+        (e) => e.name == json['tier'],
+      ),
+      requiredProgress: json['requiredProgress'] as int,
+      rewards: Map<String, dynamic>.from(json['rewards'] as Map),
+      unlockedAt: json['unlockedAt'] != null 
+          ? DateTime.fromMillisecondsSinceEpoch(json['unlockedAt'] as int)
+          : null,
+      icon: json['icon'] as String?,
+    );
+  }
+
+  Color get rarityColor {
+    switch (rarity) {
+      case AchievementRarity.common:
+        return Colors.grey;
+      case AchievementRarity.rare:
+        return Colors.blue;
+      case AchievementRarity.epic:
+        return Colors.purple;
+      case AchievementRarity.legendary:
+        return Colors.orange;
+    }
   }
 }
 
-class AchievementService {
-  static final AchievementService _instance = AchievementService._internal();
-  factory AchievementService() => _instance;
-  AchievementService._internal();
+class AchievementService extends ChangeNotifier {
+  static AchievementService? _instance;
+  static AchievementService get instance => _instance ??= AchievementService._();
+  AchievementService._();
 
-  final StreamController<Achievement> _achievementUnlockedController = StreamController.broadcast();
-  final StreamController<Badge> _badgeEarnedController = StreamController.broadcast();
-  final StreamController<List<Achievement>> _achievementsController = StreamController.broadcast();
+  late SharedPreferences _prefs;
+  bool _isInitialized = false;
 
-  Stream<Achievement> get achievementUnlockedStream => _achievementUnlockedController.stream;
-  Stream<Badge> get badgeEarnedStream => _badgeEarnedController.stream;
-  Stream<List<Achievement>> get achievementsStream => _achievementsController.stream;
+  // Achievement data
+  final Map<String, Achievement> _achievements = {};
+  final Set<String> _unlockedAchievements = {};
+  final Map<String, int> _achievementProgress = {};
+  final List<String> _recentUnlocks = [];
 
-  List<Achievement> _achievements = [];
-  List<Badge> _earnedBadges = [];
-  String? _playerId;
+  // Getters
+  Map<String, Achievement> get achievements => Map.unmodifiable(_achievements);
+  Set<String> get unlockedAchievements => Set.unmodifiable(_unlockedAchievements);
+  Map<String, int> get achievementProgress => Map.unmodifiable(_achievementProgress);
+  List<String> get recentUnlocks => List.unmodifiable(_recentUnlocks);
 
-  // Initialize achievement system
-  Future<void> initialize(String playerId) async {
-    _playerId = playerId;
-    await _loadPlayerProgress();
+  // Initialize service
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    _prefs = await SharedPreferences.getInstance();
+    await _loadAchievementData();
     _initializeAchievements();
-    _achievementsController.add(_achievements);
+    _isInitialized = true;
+    notifyListeners();
   }
 
-  // Initialize all available achievements
+  // Load achievement data from preferences
+  Future<void> _loadAchievementData() async {
+    final unlockedList = _prefs.getStringList('achievements_unlocked') ?? [];
+    _unlockedAchievements.addAll(unlockedList);
+
+    final progressList = _prefs.getStringList('achievements_progress') ?? [];
+    for (final progressStr in progressList) {
+      final parts = progressStr.split(':');
+      if (parts.length == 2) {
+        final achievementId = parts[0];
+        final progress = int.tryParse(parts[1]) ?? 0;
+        _achievementProgress[achievementId] = progress;
+      }
+    }
+
+    final recentList = _prefs.getStringList('achievements_recent') ?? [];
+    _recentUnlocks.addAll(recentList);
+  }
+
+  // Save achievement data to preferences
+  Future<void> _saveAchievementData() async {
+    await _prefs.setStringList('achievements_unlocked', _unlockedAchievements.toList());
+    
+    final progressList = _achievementProgress.entries
+        .map((entry) => '${entry.key}:${entry.value}')
+        .toList();
+    await _prefs.setStringList('achievements_progress', progressList);
+    
+    await _prefs.setStringList('achievements_recent', _recentUnlocks);
+  }
+
+  // Add achievement to the service
+  void _addAchievement(Achievement achievement) {
+    _achievements[achievement.id] = achievement;
+  }
+
+  // Initialize all achievements
   void _initializeAchievements() {
-    _achievements = [
-      // Exploration Achievements
-      ..._createExplorationAchievements(),
-      // Fitness Achievements
-      ..._createFitnessAchievements(),
-      // Social Achievements
-      ..._createSocialAchievements(),
-      // Milestone Achievements
-      ..._createMilestoneAchievements(),
-      // Seasonal Achievements
-      ..._createSeasonalAchievements(),
-      // Special Achievements
-      ..._createSpecialAchievements(),
-      // Collection Achievements
-      ..._createCollectionAchievements(),
-      // Combat Achievements
-      ..._createCombatAchievements(),
-    ];
+    // Battle achievements
+    _addAchievement(Achievement(
+      id: 'first_blood',
+      title: 'First Blood',
+      description: 'Win your first battle',
+      category: AchievementCategory.battle,
+      rarity: AchievementRarity.common,
+      tier: AchievementTier.bronze,
+      requiredProgress: 1,
+      rewards: {'experience': 50, 'gold': 25},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'battle_master',
+      title: 'Battle Master',
+      description: 'Win 10 battles',
+      category: AchievementCategory.battle,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 10,
+      rewards: {'experience': 200, 'gold': 100, 'skill_points': 2},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'legendary_warrior',
+      title: 'Legendary Warrior',
+      description: 'Win 50 battles',
+      category: AchievementCategory.battle,
+      rarity: AchievementRarity.legendary,
+      tier: AchievementTier.gold,
+      requiredProgress: 50,
+      rewards: {'experience': 1000, 'gold': 500, 'skill_points': 5, 'title': 'Legendary Warrior'},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'perfect_victory',
+      title: 'Perfect Victory',
+      description: 'Win a battle without taking damage',
+      category: AchievementCategory.battle,
+      rarity: AchievementRarity.epic,
+      tier: AchievementTier.platinum,
+      requiredProgress: 1,
+      rewards: {'experience': 300, 'gold': 150, 'equipment': 'Perfect Shield'},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'streak_master',
+      title: 'Streak Master',
+      description: 'Win 5 battles in a row',
+      category: AchievementCategory.battle,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 5,
+      rewards: {'experience': 400, 'gold': 200, 'skill_points': 3},
+    ));
+
+    // Progression achievements
+    _addAchievement(Achievement(
+      id: 'level_10',
+      title: 'Apprentice',
+      description: 'Reach level 10',
+      category: AchievementCategory.progression,
+      rarity: AchievementRarity.common,
+      tier: AchievementTier.bronze,
+      requiredProgress: 10,
+      rewards: {'experience': 100, 'gold': 50, 'skill_points': 1},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'level_25',
+      title: 'Adept',
+      description: 'Reach level 25',
+      category: AchievementCategory.progression,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 25,
+      rewards: {'experience': 500, 'gold': 250, 'skill_points': 3},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'level_50',
+      title: 'Master',
+      description: 'Reach level 50',
+      category: AchievementCategory.progression,
+      rarity: AchievementRarity.epic,
+      tier: AchievementTier.gold,
+      requiredProgress: 50,
+      rewards: {'experience': 1500, 'gold': 750, 'skill_points': 5, 'title': 'Master'},
+    ));
+
+    // Collection achievements
+    _addAchievement(Achievement(
+      id: 'card_collector',
+      title: 'Card Collector',
+      description: 'Collect 50 different cards',
+      category: AchievementCategory.collection,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 50,
+      rewards: {'experience': 300, 'gold': 150, 'cards': 5},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'equipment_master',
+      title: 'Equipment Master',
+      description: 'Equip a full set of legendary items',
+      category: AchievementCategory.collection,
+      rarity: AchievementRarity.legendary,
+      tier: AchievementTier.gold,
+      requiredProgress: 8,
+      rewards: {'experience': 1000, 'gold': 500, 'title': 'Equipment Master'},
+    ));
+
+    // Fitness achievements
+    _addAchievement(Achievement(
+      id: 'workout_30_min',
+      title: 'Fitness Enthusiast',
+      description: 'Complete a 30-minute workout',
+      category: AchievementCategory.fitness,
+      rarity: AchievementRarity.common,
+      tier: AchievementTier.bronze,
+      requiredProgress: 1,
+      rewards: {'experience': 100, 'gold': 50},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'workout_1_hour',
+      title: 'Dedicated Athlete',
+      description: 'Complete a 1-hour workout',
+      category: AchievementCategory.fitness,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 1,
+      rewards: {'experience': 300, 'gold': 150, 'skill_points': 2},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'run_5km',
+      title: 'Distance Runner',
+      description: 'Run 5km in a single session',
+      category: AchievementCategory.fitness,
+      rarity: AchievementRarity.epic,
+      tier: AchievementTier.gold,
+      requiredProgress: 1,
+      rewards: {'experience': 500, 'gold': 250, 'equipment': 'Running Shoes'},
+    ));
+
+    // Special achievements
+    _addAchievement(Achievement(
+      id: 'daily_player',
+      title: 'Daily Player',
+      description: 'Play for 7 consecutive days',
+      category: AchievementCategory.special,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 7,
+      rewards: {'experience': 200, 'gold': 100, 'daily_bonus': true},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'social_butterfly',
+      title: 'Social Butterfly',
+      description: 'Play 10 battles with friends',
+      category: AchievementCategory.social,
+      rarity: AchievementRarity.epic,
+      tier: AchievementTier.gold,
+      requiredProgress: 10,
+      rewards: {'experience': 400, 'gold': 200, 'title': 'Social Butterfly'},
+    ));
+
+    // Collection achievements
+    _addAchievement(Achievement(
+      id: 'achievement_collector_10',
+      title: 'Achievement Hunter',
+      description: 'Unlock 10 achievements',
+      category: AchievementCategory.collection,
+      rarity: AchievementRarity.rare,
+      tier: AchievementTier.silver,
+      requiredProgress: 10,
+      rewards: {'experience': 200, 'gold': 100},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'achievement_collector_25',
+      title: 'Achievement Master',
+      description: 'Unlock 25 achievements',
+      category: AchievementCategory.collection,
+      rarity: AchievementRarity.epic,
+      tier: AchievementTier.gold,
+      requiredProgress: 25,
+      rewards: {'experience': 500, 'gold': 250, 'title': 'Achievement Master'},
+    ));
+
+    _addAchievement(Achievement(
+      id: 'achievement_collector_50',
+      title: 'Achievement Legend',
+      description: 'Unlock 50 achievements',
+      category: AchievementCategory.collection,
+      rarity: AchievementRarity.legendary,
+      tier: AchievementTier.platinum,
+      requiredProgress: 50,
+      rewards: {'experience': 1000, 'gold': 500, 'title': 'Achievement Legend'},
+    ));
   }
 
-  // Create exploration achievements
-  List<Achievement> _createExplorationAchievements() {
-    return [
-      Achievement(
-        id: 'first_steps',
-        name: 'First Steps',
-        description: 'Take your first 1,000 steps in adventure mode',
-        category: AchievementCategory.exploration,
-        rarity: AchievementRarity.common,
-        requirements: {'steps': 1000},
-        rewards: {'xp': 100, 'title': 'First Walker'},
-        iconPath: 'achievements/first_steps.png',
-      ),
-      Achievement(
-        id: 'location_explorer',
-        name: 'Location Explorer',
-        description: 'Visit 10 different POIs',
-        category: AchievementCategory.exploration,
-        rarity: AchievementRarity.uncommon,
-        requirements: {'unique_locations': 10},
-        rewards: {'xp': 250, 'cards': 2, 'title': 'Explorer'},
-        iconPath: 'achievements/location_explorer.png',
-      ),
-      Achievement(
-        id: 'world_traveler',
-        name: 'World Traveler',
-        description: 'Travel a total distance of 100 kilometers',
-        category: AchievementCategory.exploration,
-        rarity: AchievementRarity.rare,
-        requirements: {'total_distance': 100000},
-        rewards: {'xp': 500, 'cards': 3, 'title': 'World Traveler'},
-        iconPath: 'achievements/world_traveler.png',
-        maxProgress: 100000,
-      ),
-      Achievement(
-        id: 'territory_master',
-        name: 'Territory Master',
-        description: 'Visit every type of location at least once',
-        category: AchievementCategory.exploration,
-        rarity: AchievementRarity.epic,
-        requirements: {
-          'parks': 1, 'gyms': 1, 'restaurants': 1, 
-          'monuments': 1, 'libraries': 1
-        },
-        rewards: {'xp': 750, 'cards': 4, 'title': 'Territory Master'},
-        iconPath: 'achievements/territory_master.png',
-      ),
-      Achievement(
-        id: 'legendary_explorer',
-        name: 'Legendary Explorer',
-        description: 'Complete 100 exploration quests',
-        category: AchievementCategory.exploration,
-        rarity: AchievementRarity.legendary,
-        requirements: {'exploration_quests': 100},
-        rewards: {'xp': 1000, 'cards': 5, 'title': 'Legendary Explorer'},
-        iconPath: 'achievements/legendary_explorer.png',
-        maxProgress: 100,
-      ),
-    ];
-  }
+  // Unlock an achievement
+  void unlockAchievement(String achievementId) {
+    if (_unlockedAchievements.contains(achievementId)) {
+      return; // Already unlocked
+    }
 
-  // Create fitness achievements
-  List<Achievement> _createFitnessAchievements() {
-    return [
-      Achievement(
-        id: 'fitness_beginner',
-        name: 'Fitness Beginner',
-        description: 'Complete your first workout session',
-        category: AchievementCategory.fitness,
-        rarity: AchievementRarity.common,
-        requirements: {'workouts': 1},
-        rewards: {'xp': 50, 'title': 'Fitness Starter'},
-        iconPath: 'achievements/fitness_beginner.png',
-      ),
-      Achievement(
-        id: 'step_master',
-        name: 'Step Master',
-        description: 'Take 10,000 steps in a single day',
-        category: AchievementCategory.fitness,
-        rarity: AchievementRarity.uncommon,
-        requirements: {'daily_steps': 10000},
-        rewards: {'xp': 200, 'cards': 2, 'title': 'Step Master'},
-        iconPath: 'achievements/step_master.png',
-        isRepeatable: true,
-      ),
-      Achievement(
-        id: 'marathon_runner',
-        name: 'Marathon Runner',
-        description: 'Run/walk 42.2 kilometers in adventure mode',
-        category: AchievementCategory.fitness,
-        rarity: AchievementRarity.rare,
-        requirements: {'running_distance': 42200},
-        rewards: {'xp': 600, 'cards': 3, 'title': 'Marathon Runner'},
-        iconPath: 'achievements/marathon_runner.png',
-        maxProgress: 42200,
-      ),
-      Achievement(
-        id: 'fitness_champion',
-        name: 'Fitness Champion',
-        description: 'Maintain a 30-day workout streak',
-        category: AchievementCategory.fitness,
-        rarity: AchievementRarity.epic,
-        requirements: {'workout_streak': 30},
-        rewards: {'xp': 800, 'cards': 4, 'title': 'Fitness Champion'},
-        iconPath: 'achievements/fitness_champion.png',
-        maxProgress: 30,
-      ),
-      Achievement(
-        id: 'legendary_athlete',
-        name: 'Legendary Athlete',
-        description: 'Burn 100,000 calories through adventures',
-        category: AchievementCategory.fitness,
-        rarity: AchievementRarity.legendary,
-        requirements: {'total_calories': 100000},
-        rewards: {'xp': 1200, 'cards': 5, 'title': 'Legendary Athlete'},
-        iconPath: 'achievements/legendary_athlete.png',
-        maxProgress: 100000,
-      ),
-    ];
-  }
+    final achievement = _achievements[achievementId];
+    if (achievement == null) {
+      if (kDebugMode) {
+        print('[AchievementService] Achievement not found: $achievementId');
+      }
+      return;
+    }
 
-  // Create social achievements
-  List<Achievement> _createSocialAchievements() {
-    return [
-      Achievement(
-        id: 'social_butterfly',
-        name: 'Social Butterfly',
-        description: 'Add 5 friends to your adventure network',
-        category: AchievementCategory.social,
-        rarity: AchievementRarity.common,
-        requirements: {'friends': 5},
-        rewards: {'xp': 150, 'title': 'Social Butterfly'},
-        iconPath: 'achievements/social_butterfly.png',
-      ),
-      Achievement(
-        id: 'team_player',
-        name: 'Team Player',
-        description: 'Complete 10 team adventures',
-        category: AchievementCategory.social,
-        rarity: AchievementRarity.uncommon,
-        requirements: {'team_adventures': 10},
-        rewards: {'xp': 300, 'cards': 2, 'title': 'Team Player'},
-        iconPath: 'achievements/team_player.png',
-        maxProgress: 10,
-      ),
-      Achievement(
-        id: 'challenge_master',
-        name: 'Challenge Master',
-        description: 'Win 25 friend challenges',
-        category: AchievementCategory.social,
-        rarity: AchievementRarity.rare,
-        requirements: {'challenges_won': 25},
-        rewards: {'xp': 500, 'cards': 3, 'title': 'Challenge Master'},
-        iconPath: 'achievements/challenge_master.png',
-        maxProgress: 25,
-      ),
-      Achievement(
-        id: 'community_leader',
-        name: 'Community Leader',
-        description: 'Help organize 5 community events',
-        category: AchievementCategory.social,
-        rarity: AchievementRarity.epic,
-        requirements: {'community_events': 5},
-        rewards: {'xp': 750, 'cards': 4, 'title': 'Community Leader'},
-        iconPath: 'achievements/community_leader.png',
-        maxProgress: 5,
-      ),
-    ];
-  }
+    _unlockedAchievements.add(achievementId);
+    _achievementProgress[achievementId] = achievement.requiredProgress;
+    _recentUnlocks.add(achievementId);
 
-  // Create milestone achievements
-  List<Achievement> _createMilestoneAchievements() {
-    return [
-      Achievement(
-        id: 'first_week',
-        name: 'Week Warrior',
-        description: 'Maintain a 7-day check-in streak',
-        category: AchievementCategory.milestone,
-        rarity: AchievementRarity.common,
-        requirements: {'check_in_streak': 7},
-        rewards: {'xp': 200, 'cards': 1, 'title': 'Week Warrior'},
-        iconPath: 'achievements/first_week.png',
-      ),
-      Achievement(
-        id: 'monthly_master',
-        name: 'Monthly Master',
-        description: 'Maintain a 30-day check-in streak',
-        category: AchievementCategory.milestone,
-        rarity: AchievementRarity.rare,
-        requirements: {'check_in_streak': 30},
-        rewards: {'xp': 500, 'cards': 3, 'title': 'Monthly Master'},
-        iconPath: 'achievements/monthly_master.png',
-        prerequisites: ['first_week'],
-      ),
-      Achievement(
-        id: 'century_club',
-        name: 'Century Club',
-        description: 'Complete 100 quests of any type',
-        category: AchievementCategory.milestone,
-        rarity: AchievementRarity.epic,
-        requirements: {'total_quests': 100},
-        rewards: {'xp': 1000, 'cards': 4, 'title': 'Century Master'},
-        iconPath: 'achievements/century_club.png',
-        maxProgress: 100,
-      ),
-      Achievement(
-        id: 'legendary_dedication',
-        name: 'Legendary Dedication',
-        description: 'Maintain a 365-day check-in streak',
-        category: AchievementCategory.milestone,
-        rarity: AchievementRarity.mythic,
-        requirements: {'check_in_streak': 365},
-        rewards: {'xp': 2000, 'cards': 10, 'title': 'Eternal Guardian'},
-        iconPath: 'achievements/legendary_dedication.png',
-        prerequisites: ['monthly_master'],
-      ),
-    ];
-  }
+    // Keep only last 10 recent unlocks
+    if (_recentUnlocks.length > 10) {
+      _recentUnlocks.removeAt(0);
+    }
 
-  // Create seasonal achievements
-  List<Achievement> _createSeasonalAchievements() {
-    return [
-      Achievement(
-        id: 'spring_awakening',
-        name: 'Spring Awakening',
-        description: 'Complete the Spring Awakening event',
-        category: AchievementCategory.seasonal,
-        rarity: AchievementRarity.rare,
-        requirements: {'spring_event_completion': 1},
-        rewards: {'xp': 500, 'cards': 3, 'title': 'Spring Champion'},
-        iconPath: 'achievements/spring_awakening.png',
-        isHidden: true,
-      ),
-      Achievement(
-        id: 'summer_solstice',
-        name: 'Summer Solstice',
-        description: 'Complete the Solar Festival event',
-        category: AchievementCategory.seasonal,
-        rarity: AchievementRarity.rare,
-        requirements: {'summer_event_completion': 1},
-        rewards: {'xp': 500, 'cards': 3, 'title': 'Solar Champion'},
-        iconPath: 'achievements/summer_solstice.png',
-        isHidden: true,
-      ),
-      Achievement(
-        id: 'four_seasons_master',
-        name: 'Four Seasons Master',
-        description: 'Complete all seasonal events in one year',
-        category: AchievementCategory.seasonal,
-        rarity: AchievementRarity.legendary,
-        requirements: {
-          'spring_event_completion': 1,
-          'summer_event_completion': 1,
-          'autumn_event_completion': 1,
-          'winter_event_completion': 1,
-        },
-        rewards: {'xp': 1500, 'cards': 6, 'title': 'Seasonal Master'},
-        iconPath: 'achievements/four_seasons_master.png',
-        prerequisites: ['spring_awakening', 'summer_solstice'],
-      ),
-    ];
-  }
+    // Award rewards
+    _awardAchievementRewards(achievement);
 
-  // Create special achievements
-  List<Achievement> _createSpecialAchievements() {
-    return [
-      Achievement(
-        id: 'weather_warrior',
-        name: 'Weather Warrior',
-        description: 'Complete quests in all weather conditions',
-        category: AchievementCategory.special,
-        rarity: AchievementRarity.rare,
-        requirements: {
-          'sunny_quests': 5,
-          'rainy_quests': 5,
-          'cloudy_quests': 5,
-          'snowy_quests': 1,
-        },
-        rewards: {'xp': 600, 'cards': 3, 'title': 'Weather Warrior'},
-        iconPath: 'achievements/weather_warrior.png',
-      ),
-      Achievement(
-        id: 'night_owl',
-        name: 'Night Owl',
-        description: 'Complete 20 quests after sunset',
-        category: AchievementCategory.special,
-        rarity: AchievementRarity.uncommon,
-        requirements: {'night_quests': 20},
-        rewards: {'xp': 300, 'cards': 2, 'title': 'Night Owl'},
-        iconPath: 'achievements/night_owl.png',
-        maxProgress: 20,
-      ),
-      Achievement(
-        id: 'early_bird',
-        name: 'Early Bird',
-        description: 'Complete 20 quests before sunrise',
-        category: AchievementCategory.special,
-        rarity: AchievementRarity.uncommon,
-        requirements: {'sunrise_quests': 20},
-        rewards: {'xp': 300, 'cards': 2, 'title': 'Early Bird'},
-        iconPath: 'achievements/early_bird.png',
-        maxProgress: 20,
-      ),
-      Achievement(
-        id: 'lucky_number',
-        name: 'Lucky Number Seven',
-        description: 'Find 7 rare spawns in one day',
-        category: AchievementCategory.special,
-        rarity: AchievementRarity.epic,
-        requirements: {'daily_rare_spawns': 7},
-        rewards: {'xp': 777, 'cards': 7, 'title': 'Lucky Finder'},
-        iconPath: 'achievements/lucky_number.png',
-        isHidden: true,
-      ),
-    ];
-  }
+    // Check for collection achievements
+    _checkCollectionAchievements();
 
-  // Create collection achievements
-  List<Achievement> _createCollectionAchievements() {
-    return [
-      Achievement(
-        id: 'card_collector',
-        name: 'Card Collector',
-        description: 'Collect 50 unique cards from adventures',
-        category: AchievementCategory.collection,
-        rarity: AchievementRarity.uncommon,
-        requirements: {'unique_cards': 50},
-        rewards: {'xp': 300, 'cards': 3, 'title': 'Card Collector'},
-        iconPath: 'achievements/card_collector.png',
-        maxProgress: 50,
-      ),
-      Achievement(
-        id: 'treasure_hunter',
-        name: 'Treasure Hunter',
-        description: 'Find 100 treasure chests',
-        category: AchievementCategory.collection,
-        rarity: AchievementRarity.rare,
-        requirements: {'treasure_chests': 100},
-        rewards: {'xp': 500, 'cards': 4, 'title': 'Treasure Hunter'},
-        iconPath: 'achievements/treasure_hunter.png',
-        maxProgress: 100,
-      ),
-      Achievement(
-        id: 'master_collector',
-        name: 'Master Collector',
-        description: 'Collect 500 unique items from adventures',
-        category: AchievementCategory.collection,
-        rarity: AchievementRarity.legendary,
-        requirements: {'unique_items': 500},
-        rewards: {'xp': 1000, 'cards': 5, 'title': 'Master Collector'},
-        iconPath: 'achievements/master_collector.png',
-        maxProgress: 500,
-      ),
-    ];
-  }
+    // Save progress
+    _saveAchievementData();
+    notifyListeners();
 
-  // Create combat achievements
-  List<Achievement> _createCombatAchievements() {
-    return [
-      Achievement(
-        id: 'first_victory',
-        name: 'First Victory',
-        description: 'Win your first battle encounter',
-        category: AchievementCategory.combat,
-        rarity: AchievementRarity.common,
-        requirements: {'battles_won': 1},
-        rewards: {'xp': 100, 'cards': 1, 'title': 'Warrior'},
-        iconPath: 'achievements/first_victory.png',
-      ),
-      Achievement(
-        id: 'battle_tested',
-        name: 'Battle Tested',
-        description: 'Win 50 battle encounters',
-        category: AchievementCategory.combat,
-        rarity: AchievementRarity.rare,
-        requirements: {'battles_won': 50},
-        rewards: {'xp': 500, 'cards': 3, 'title': 'Battle Tested'},
-        iconPath: 'achievements/battle_tested.png',
-        maxProgress: 50,
-      ),
-      Achievement(
-        id: 'legendary_warrior',
-        name: 'Legendary Warrior',
-        description: 'Defeat a legendary boss encounter',
-        category: AchievementCategory.combat,
-        rarity: AchievementRarity.legendary,
-        requirements: {'legendary_bosses_defeated': 1},
-        rewards: {'xp': 1000, 'cards': 5, 'title': 'Legendary Warrior'},
-        iconPath: 'achievements/legendary_warrior.png',
-        isHidden: true,
-      ),
-    ];
+    if (kDebugMode) {
+      print('[AchievementService] Achievement unlocked: ${achievement.title}');
+    }
   }
 
   // Update achievement progress
-  Future<void> updateProgress(String achievementId, Map<String, dynamic> progressData) async {
-    final achievementIndex = _achievements.indexWhere((a) => a.id == achievementId);
-    if (achievementIndex == -1) return;
+  void updateAchievementProgress(String achievementId, int progress) {
+    if (_unlockedAchievements.contains(achievementId)) {
+      return; // Already unlocked
+    }
 
-    final achievement = _achievements[achievementIndex];
-    if (achievement.isCompleted && !achievement.isRepeatable) return;
+    final achievement = _achievements[achievementId];
+    if (achievement == null) return;
 
-    // Update progress
-    final updatedProgress = Map<String, dynamic>.from(achievement.progress);
-    progressData.forEach((key, value) {
-      updatedProgress[key] = (updatedProgress[key] ?? 0) + value;
-    });
-
-    // Check if achievement is completed
-    bool isCompleted = _checkAchievementCompletion(achievement, updatedProgress);
+    final currentProgress = _achievementProgress[achievementId] ?? 0;
+    final newProgress = (currentProgress + progress).clamp(0, achievement.requiredProgress);
     
-    final updatedAchievement = achievement.copyWith(
-      progress: updatedProgress,
-      isCompleted: isCompleted,
-      completedAt: isCompleted ? DateTime.now() : achievement.completedAt,
-    );
+    _achievementProgress[achievementId] = newProgress;
 
-    _achievements[achievementIndex] = updatedAchievement;
-
-    if (isCompleted && !achievement.isCompleted) {
-      await _handleAchievementCompletion(updatedAchievement);
+    // Check if achievement should be unlocked
+    if (newProgress >= achievement.requiredProgress) {
+      unlockAchievement(achievementId);
+    } else {
+      _saveAchievementData();
+      notifyListeners();
     }
-
-    await _savePlayerProgress();
-    _achievementsController.add(_achievements);
   }
 
-  // Check if achievement requirements are met
-  bool _checkAchievementCompletion(Achievement achievement, Map<String, dynamic> progress) {
-    for (final requirement in achievement.requirements.entries) {
-      final currentProgress = progress[requirement.key] ?? 0;
-      if (currentProgress < requirement.value) {
-        return false;
-      }
-    }
+  // Award rewards for unlocking an achievement
+  void _awardAchievementRewards(Achievement achievement) {
+    final characterProvider = _getCharacterProvider();
+    if (characterProvider == null) return;
 
-    // Check prerequisites
-    for (final prerequisiteId in achievement.prerequisites) {
-      final prerequisite = _achievements.firstWhere((a) => a.id == prerequisiteId);
-      if (!prerequisite.isCompleted) {
-        return false;
-      }
-    }
+    final character = characterProvider.currentCharacter;
+    if (character == null) return;
 
-    return true;
-  }
-
-  // Handle achievement completion
-  Future<void> _handleAchievementCompletion(Achievement achievement) async {
-    // Award rewards
-    await _awardAchievementRewards(achievement);
-
-    // Create badge
-    final badge = Badge(
-      id: 'badge_${achievement.id}',
-      name: achievement.name,
-      description: achievement.description,
-      iconPath: achievement.iconPath,
-      rarity: achievement.rarity,
-      earnedAt: DateTime.now(),
-      earnedFor: achievement.description,
-    );
-
-    _earnedBadges.add(badge);
-
-    // Notify listeners
-    _achievementUnlockedController.add(achievement);
-    _badgeEarnedController.add(badge);
-
-    await _savePlayerProgress();
-  }
-
-  // Award achievement rewards
-  Future<void> _awardAchievementRewards(Achievement achievement) async {
-    final rewards = achievement.rewards;
-    
-    // Award XP
-    if (rewards['xp'] != null) {
-      final progressionService = AdventureProgressionService();
-      await progressionService.awardAdventureXP(
-        rewards['xp'],
-        'Achievement: ${achievement.name}',
+    // Award experience
+    if (achievement.rewards.containsKey('experience')) {
+      characterProvider.addExperience(
+        achievement.rewards['experience'] as int,
+        source: 'Achievement: ${achievement.title}',
       );
     }
 
-    // Award cards, titles, etc. would integrate with your game systems
-    print('Awarded achievement rewards: ${achievement.name}');
+    // Award gold
+    if (achievement.rewards.containsKey('gold')) {
+      // Add gold to character (this would need to be implemented in CharacterProvider)
+      if (kDebugMode) {
+        print('[AchievementService] Awarded ${achievement.rewards['gold']} gold for ${achievement.title}');
+      }
+    }
+
+    // Award items
+    if (achievement.rewards.containsKey('equipment')) {
+      // Add item to character inventory (this would need to be implemented)
+      if (kDebugMode) {
+        print('[AchievementService] Awarded equipment ${achievement.rewards['equipment']} for ${achievement.title}');
+      }
+    }
+
+    // Award stat points
+    if (achievement.rewards.containsKey('skill_points')) {
+      // Add stat points to character (this would need to be implemented)
+      if (kDebugMode) {
+        print('[AchievementService] Awarded ${achievement.rewards['skill_points']} skill points for ${achievement.title}');
+      }
+    }
+  }
+
+  // Check for collection achievements
+  void _checkCollectionAchievements() {
+    final unlockedCount = _unlockedAchievements.length;
+    
+    // Check for achievement count milestones
+    if (unlockedCount >= 10 && !_unlockedAchievements.contains('achievement_collector_10')) {
+      unlockAchievement('achievement_collector_10');
+    }
+    if (unlockedCount >= 25 && !_unlockedAchievements.contains('achievement_collector_25')) {
+      unlockAchievement('achievement_collector_25');
+    }
+    if (unlockedCount >= 50 && !_unlockedAchievements.contains('achievement_collector_50')) {
+      unlockAchievement('achievement_collector_50');
+    }
+
+    // Check for category-specific achievements
+    _checkCategoryAchievements();
+  }
+
+  // Check for category-specific achievements
+  void _checkCategoryAchievements() {
+    final categoryCounts = <AchievementCategory, int>{};
+    
+    for (final achievementId in _unlockedAchievements) {
+      final achievement = _achievements[achievementId];
+      if (achievement != null) {
+        categoryCounts[achievement.category] = (categoryCounts[achievement.category] ?? 0) + 1;
+      }
+    }
+
+    // Check for category milestones
+    for (final entry in categoryCounts.entries) {
+      final category = entry.key;
+      final count = entry.value;
+      
+      if (count >= 5 && !_unlockedAchievements.contains('${category.name}_master_5')) {
+        unlockAchievement('${category.name}_master_5');
+      }
+      if (count >= 10 && !_unlockedAchievements.contains('${category.name}_master_10')) {
+        unlockAchievement('${category.name}_master_10');
+      }
+    }
+  }
+
+  // Get achievement by ID
+  Achievement? getAchievement(String achievementId) {
+    return _achievements[achievementId];
+  }
+
+  // Get achievement progress
+  double getAchievementProgress(String achievementId) {
+    final achievement = _achievements[achievementId];
+    if (achievement == null) return 0.0;
+
+    if (_unlockedAchievements.contains(achievementId)) {
+      return 1.0;
+    }
+
+    final currentProgress = _achievementProgress[achievementId] ?? 0;
+    return currentProgress / achievement.requiredProgress;
   }
 
   // Get achievements by category
   List<Achievement> getAchievementsByCategory(AchievementCategory category) {
-    return _achievements.where((achievement) => 
-        achievement.category == category && 
-        (!achievement.isHidden || achievement.isCompleted)
-    ).toList();
+    return _achievements.values
+        .where((achievement) => achievement.category == category)
+        .toList();
   }
 
-  // Get completed achievements
-  List<Achievement> getCompletedAchievements() {
-    return _achievements.where((achievement) => achievement.isCompleted).toList();
+  // Get unlocked achievements
+  List<Achievement> getUnlockedAchievements() {
+    return _unlockedAchievements
+        .map((id) => _achievements[id])
+        .where((achievement) => achievement != null)
+        .cast<Achievement>()
+        .toList();
   }
 
-  // Get earned badges
-  List<Badge> getEarnedBadges() {
-    return _earnedBadges;
+  // Get recent achievements (last 10)
+  List<Achievement> getRecentAchievements() {
+    final unlocked = getUnlockedAchievements();
+    unlocked.sort((a, b) => b.unlockedAt?.compareTo(a.unlockedAt ?? DateTime.now()) ?? 0);
+    return unlocked.take(10).toList();
   }
 
-  // Get achievement completion stats
-  Map<String, dynamic> getCompletionStats() {
-    final total = _achievements.where((a) => !a.isHidden).length;
-    final completed = _achievements.where((a) => a.isCompleted && !a.isHidden).length;
-    
-    final categoriesStats = <String, Map<String, int>>{};
+  // Get achievement statistics
+  Map<String, dynamic> getAchievementStatistics() {
+    final totalAchievements = _achievements.length;
+    final unlockedCount = _unlockedAchievements.length;
+    final completionRate = totalAchievements > 0 ? unlockedCount / totalAchievements : 0.0;
+
+    final categoryStats = <String, int>{};
     for (final category in AchievementCategory.values) {
-      final categoryAchievements = _achievements.where((a) => 
-          a.category == category && !a.isHidden).toList();
-      final categoryCompleted = categoryAchievements.where((a) => a.isCompleted).length;
-      
-      categoriesStats[category.toString()] = {
-        'total': categoryAchievements.length,
-        'completed': categoryCompleted,
-      };
+      final categoryAchievements = getAchievementsByCategory(category);
+      final unlockedInCategory = categoryAchievements
+          .where((achievement) => _unlockedAchievements.contains(achievement.id))
+          .length;
+      categoryStats[category.name] = unlockedInCategory;
     }
 
     return {
-      'total_achievements': total,
-      'completed_achievements': completed,
-      'completion_percentage': total > 0 ? (completed / total * 100).round() : 0,
-      'total_badges': _earnedBadges.length,
-      'categories': categoriesStats,
+      'totalAchievements': totalAchievements,
+      'unlockedCount': unlockedCount,
+      'completionRate': completionRate,
+      'categoryStats': categoryStats,
+      'recentAchievements': getRecentAchievements().length,
     };
   }
 
-  // Auto-track common activities
-  Future<void> trackSteps(int steps) async {
-    await updateProgress('first_steps', {'steps': steps});
-    await updateProgress('step_master', {'daily_steps': steps});
+  // Get rarity statistics
+  Map<AchievementRarity, int> getRarityStatistics() {
+    final stats = <AchievementRarity, int>{};
+    for (final rarity in AchievementRarity.values) {
+      stats[rarity] = _achievements.values
+          .where((a) => a.rarity == rarity && _unlockedAchievements.contains(a.id))
+          .length;
+    }
+    return stats;
   }
 
-  Future<void> trackLocationVisit(String locationType) async {
-    await updateProgress('location_explorer', {'unique_locations': 1});
-    await updateProgress('territory_master', {locationType: 1});
+  // Get character provider from context
+  CharacterProvider? _getCharacterProvider() {
+    // This would need to be implemented with proper context access
+    // For now, we'll return null and handle it gracefully
+    return null;
   }
 
-  Future<void> trackQuestCompletion(String questType) async {
-    await updateProgress('century_club', {'total_quests': 1});
-    
-    if (questType == 'exploration') {
-      await updateProgress('legendary_explorer', {'exploration_quests': 1});
+  /// Update progress for a specific achievement
+  void updateProgress(String achievementId, int amount) {
+    final achievement = _achievements[achievementId];
+    if (achievement == null) return;
+
+    if (_unlockedAchievements.contains(achievementId)) return; // Already unlocked
+
+    final currentProgress = _achievementProgress[achievementId] ?? 0;
+    final newProgress = currentProgress + amount;
+    _achievementProgress[achievementId] = newProgress;
+
+    if (kDebugMode) {
+      print('[AchievementService] Updated progress for $achievementId: $currentProgress -> $newProgress');
+    }
+
+    // Check if achievement is now complete
+    if (newProgress >= achievement.requiredProgress) {
+      unlockAchievement(achievementId);
+    } else {
+      notifyListeners();
     }
   }
 
-  Future<void> trackBattleVictory() async {
-    await updateProgress('first_victory', {'battles_won': 1});
-    await updateProgress('battle_tested', {'battles_won': 1});
-  }
-
-  Future<void> trackCheckInStreak(int streak) async {
-    await updateProgress('first_week', {'check_in_streak': streak});
-    await updateProgress('monthly_master', {'check_in_streak': streak});
-    await updateProgress('legendary_dedication', {'check_in_streak': streak});
-  }
-
-  // Data persistence
-  Future<void> _savePlayerProgress() async {
-    if (_playerId == null) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final achievementsJson = jsonEncode(_achievements.map((a) => a.toJson()).toList());
-      final badgesJson = jsonEncode(_earnedBadges.map((b) => b.toJson()).toList());
-      
-      await prefs.setString('achievements_$_playerId', achievementsJson);
-      await prefs.setString('badges_$_playerId', badgesJson);
-    } catch (e) {
-      print('Error saving achievement progress: $e');
-    }
-  }
-
-  Future<void> _loadPlayerProgress() async {
-    if (_playerId == null) return;
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final achievementsJson = prefs.getString('achievements_$_playerId');
-      final badgesJson = prefs.getString('badges_$_playerId');
-
-      if (achievementsJson != null) {
-        final achievementsList = jsonDecode(achievementsJson) as List;
-        final savedAchievements = achievementsList
-            .map((json) => Achievement.fromJson(json))
-            .toList();
-
-        // Merge with current achievements (in case new ones were added)
-        for (final saved in savedAchievements) {
-          final index = _achievements.indexWhere((a) => a.id == saved.id);
-          if (index != -1) {
-            _achievements[index] = saved;
-          }
-        }
+  /// Update progress for all achievements in a category
+  void updateProgressByCategory(AchievementCategory category, int amount) {
+    for (final achievement in _achievements.values) {
+      if (achievement.category == category && !_unlockedAchievements.contains(achievement.id)) {
+        updateProgress(achievement.id, amount);
       }
-
-      if (badgesJson != null) {
-        final badgesList = jsonDecode(badgesJson) as List;
-        _earnedBadges = badgesList
-            .map((json) => Badge.fromJson(json))
-            .toList();
-      }
-    } catch (e) {
-      print('Error loading achievement progress: $e');
     }
-  }
-
-  // Cleanup
-  void dispose() {
-    _achievementUnlockedController.close();
-    _badgeEarnedController.close();
-    _achievementsController.close();
   }
 }

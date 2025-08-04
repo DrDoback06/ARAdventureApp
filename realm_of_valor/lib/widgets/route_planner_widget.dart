@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:provider/provider.dart';
 import '../models/adventure_system.dart';
 import '../services/enhanced_location_service.dart';
+import '../services/audio_service.dart';
+import '../services/analytics_service.dart';
+import '../constants/theme.dart';
+import 'route_navigation_widget.dart';
 
 class RoutePlannerWidget extends StatefulWidget {
   final List<AdventureRoute> routes;
@@ -616,18 +621,130 @@ class _RoutePlannerWidgetState extends State<RoutePlannerWidget>
   }
 
   void _startRoute(AdventureRoute route) {
-    // TODO: Implement route navigation
+    final audioService = context.read<AudioService>();
+    final analyticsService = context.read<AnalyticsService>();
+    
+    // Track route start
+    analyticsService.trackEvent(
+      EventType.locationVisited,
+      'Route Started',
+      properties: {
+        'route_name': route.name,
+        'route_distance': route.totalDistance,
+        'route_duration': route.estimatedDuration,
+        'route_difficulty': route.difficulty,
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+    );
+    
+    audioService.playQuestComplete();
     Navigator.of(context).pop();
     
+    // Show route navigation options
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Start ${route.name}'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text('Distance: ${(route.totalDistance / 1000).toStringAsFixed(1)} km'),
+            Text('Duration: ${route.estimatedDuration} minutes'),
+            Text('Difficulty: ${route.difficulty}'),
+            const SizedBox(height: 16),
+            const Text('Choose navigation method:'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _launchExternalNavigation(route);
+            },
+            child: const Text('External App'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _startInAppNavigation(route);
+            },
+            child: const Text('In-App'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _launchExternalNavigation(AdventureRoute route) {
+    final audioService = context.read<AudioService>();
+    final analyticsService = context.read<AnalyticsService>();
+    
+    // Track external navigation
+    analyticsService.trackEvent(
+      EventType.locationVisited,
+      'External Navigation Launched',
+      properties: {
+        'route_name': route.name,
+        'navigation_type': 'external_app',
+      },
+    );
+    
+    audioService.playButtonClick();
+    
+    // Simulate launching external navigation app
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Starting route: ${route.name}'),
-        backgroundColor: Colors.green,
+        content: Text('Launching navigation app for ${route.name}'),
+        backgroundColor: Colors.blue,
         action: SnackBarAction(
-          label: 'Navigate',
+          label: 'Open',
           textColor: Colors.white,
           onPressed: () {
-            // TODO: Open navigation app or start in-app navigation
+            // TODO: Launch actual navigation app
+            print('Launching external navigation for ${route.name}');
+          },
+        ),
+      ),
+    );
+  }
+
+  void _startInAppNavigation(AdventureRoute route) {
+    final audioService = context.read<AudioService>();
+    final analyticsService = context.read<AnalyticsService>();
+    
+    // Track in-app navigation
+    analyticsService.trackEvent(
+      EventType.locationVisited,
+      'In-App Navigation Started',
+      properties: {
+        'route_name': route.name,
+        'navigation_type': 'in_app',
+      },
+    );
+    
+    audioService.playQuestComplete();
+    
+    // Navigate to in-app navigation screen
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => RouteNavigationWidget(
+          destinationName: route.name,
+          destinationLatitude: route.waypoints.first.latitude,
+          destinationLongitude: route.waypoints.first.longitude,
+          currentLatitude: 37.7749, // Default to San Francisco
+          currentLongitude: -122.4194,
+          onRouteComplete: () {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Completed route: ${route.name}!'),
+                backgroundColor: Colors.green,
+              ),
+            );
           },
         ),
       ),

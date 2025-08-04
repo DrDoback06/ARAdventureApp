@@ -1,5 +1,6 @@
 import 'package:json_annotation/json_annotation.dart';
 import 'package:uuid/uuid.dart';
+import 'package:flutter/material.dart';
 
 part 'achievement_system.g.dart';
 
@@ -121,6 +122,25 @@ class Achievement {
     final current = progress['current'] ?? 0;
     final target = requirements['target'] ?? 1;
     return target > 0 ? (current / target).clamp(0.0, 1.0) : 0.0;
+  }
+
+  Color get rarityColor {
+    switch (tier) {
+      case AchievementTier.bronze:
+        return const Color(0xFFCD7F32);
+      case AchievementTier.silver:
+        return const Color(0xFFC0C0C0);
+      case AchievementTier.gold:
+        return const Color(0xFFFFD700);
+      case AchievementTier.platinum:
+        return const Color(0xFFE5E4E2);
+      case AchievementTier.diamond:
+        return const Color(0xFFB9F2FF);
+      case AchievementTier.mythic:
+        return const Color(0xFF8A2BE2);
+      case AchievementTier.legendary:
+        return const Color(0xFFFF4500);
+    }
   }
 }
 

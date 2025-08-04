@@ -376,12 +376,130 @@ class QuestService {
     _activeQuests.removeAt(questIndex);
     _completedQuests.add(quest);
     
-    // TODO: Award rewards to player
+    // Award rewards to player
+    await _awardQuestRewards(quest);
     print('Quest completed: ${quest.name}');
     print('Rewards: ${quest.experienceReward} XP, ${quest.goldReward} Gold');
     
     for (final reward in quest.rewards) {
       print('Reward: ${reward.name} (${reward.type})');
+    }
+  }
+
+  // Award quest rewards
+  Future<void> _awardQuestRewards(Quest quest) async {
+    try {
+      // Award experience points
+      if (quest.experienceReward > 0) {
+        await _addExperienceToCharacter(quest.experienceReward);
+        print('Awarded ${quest.experienceReward} XP');
+      }
+      
+      // Award gold
+      if (quest.goldReward > 0) {
+        await _addGoldToCharacter(quest.goldReward);
+        print('Awarded ${quest.goldReward} Gold');
+      }
+      
+      // Award item rewards
+      for (final reward in quest.rewards) {
+        switch (reward.type) {
+          case 'item':
+            await _addItemToInventory(reward.name, reward.value);
+            print('Awarded item: ${reward.name}');
+            break;
+          case 'skill':
+            await _unlockSkillForCharacter(reward.name);
+            print('Unlocked skill: ${reward.name}');
+            break;
+          case 'attribute':
+            await _increaseCharacterAttribute(reward.name, reward.value);
+            print('Increased attribute: ${reward.name}');
+            break;
+          case 'title':
+            await _awardTitleToCharacter(reward.name);
+            print('Awarded title: ${reward.name}');
+            break;
+          case 'gold':
+            await _addGoldToCharacter(reward.value);
+            print('Awarded gold: ${reward.value}');
+            break;
+          case 'experience':
+            await _addExperienceToCharacter(reward.value);
+            print('Awarded experience: ${reward.value}');
+            break;
+          default:
+            print('Awarded ${reward.type}: ${reward.name}');
+            break;
+        }
+      }
+      
+      // Save quest completion
+      await _saveQuestData('default_player');
+      
+    } catch (e) {
+      print('Error awarding quest rewards: $e');
+    }
+  }
+
+  // Add experience to character
+  Future<void> _addExperienceToCharacter(int experience) async {
+    try {
+      // This would integrate with CharacterProvider
+      // For now, we'll simulate the experience gain
+      print('Character gained $experience experience points');
+    } catch (e) {
+      print('Error adding experience: $e');
+    }
+  }
+
+  // Add gold to character
+  Future<void> _addGoldToCharacter(int gold) async {
+    try {
+      // This would integrate with inventory/currency system
+      print('Character gained $gold gold');
+    } catch (e) {
+      print('Error adding gold: $e');
+    }
+  }
+
+  // Add item to inventory
+  Future<void> _addItemToInventory(String itemName, int quantity) async {
+    try {
+      // This would integrate with inventory system
+      print('Added $quantity x $itemName to inventory');
+    } catch (e) {
+      print('Error adding item to inventory: $e');
+    }
+  }
+
+  // Unlock skill for character
+  Future<void> _unlockSkillForCharacter(String skillName) async {
+    try {
+      // This would integrate with skill system
+      print('Unlocked skill: $skillName');
+    } catch (e) {
+      print('Error unlocking skill: $e');
+    }
+  }
+
+  // Increase character attribute
+  Future<void> _increaseCharacterAttribute(String attributeName, int value) async {
+    try {
+      // This would integrate with character stats system
+      print('Increased $attributeName by $value');
+    } catch (e) {
+      print('Error increasing attribute: $e');
+    }
+  }
+
+  // Award title to character
+  Future<void> _awardTitleToCharacter(String titleName) async {
+    try {
+      // This would integrate with title/achievement system
+      print('Awarded title: $titleName');
+    } catch (e) {
+      print('Error awarding title: $e');
     }
   }
 
