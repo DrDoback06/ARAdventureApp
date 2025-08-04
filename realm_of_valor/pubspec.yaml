@@ -123,6 +123,9 @@ dependencies:
   # GPX file support for trails
   gpx: ^2.2.1
 
+  # Connectivity monitoring
+  connectivity_plus: ^6.0.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

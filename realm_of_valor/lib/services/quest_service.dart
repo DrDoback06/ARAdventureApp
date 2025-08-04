@@ -589,4 +589,20 @@ class MapEncounter {
   }) : data = data ?? {};
 
   bool get isExpired => DateTime.now().isAfter(expiresAt);
+
+  /// Add a new quest to the available quests list
+  void addQuest(Quest quest) {
+    if (!_availableQuests.any((q) => q.id == quest.id)) {
+      _availableQuests.add(quest);
+    }
+  }
+
+  /// Get all available quests
+  List<Quest> get availableQuests => List.unmodifiable(_availableQuests);
+
+  /// Get all active quests
+  List<Quest> get activeQuests => List.unmodifiable(_activeQuests);
+
+  /// Get all completed quests
+  List<Quest> get completedQuests => List.unmodifiable(_completedQuests);
 }
