@@ -309,9 +309,9 @@ class CompanionMemory {
   }
 }
 
-/// AI Companion Agent - Intelligent game assistant with personality
+/// AI Companion Agent - Intelligent Assistance & Emotional Support
 class AICompanionAgent extends BaseAgent {
-  static const String agentId = 'ai_companion';
+  static const String _agentTypeId = 'ai_companion';
 
   final SharedPreferences _prefs;
 
@@ -344,11 +344,11 @@ class AICompanionAgent extends BaseAgent {
   AICompanionAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing AI Companion Agent', name: agentId);
+    developer.log('Initializing AI Companion Agent', name: _agentTypeId);
 
     // Load companion data
     await _loadCompanionData();
@@ -361,7 +361,7 @@ class AICompanionAgent extends BaseAgent {
     _startProactiveBehaviors();
     _startMoodUpdates();
 
-    developer.log('AI Companion Agent initialized with ${_personality} personality', name: agentId);
+    developer.log('AI Companion Agent initialized with ${_personality} personality', name: _agentTypeId);
   }
 
   @override
@@ -441,7 +441,7 @@ class AICompanionAgent extends BaseAgent {
       },
     ));
 
-    developer.log('Companion responded: ${response.content.take(50)}...', name: agentId);
+    developer.log('Companion responded: ${response.content.take(50)}...', name: _agentTypeId);
     return response;
   }
 
@@ -481,7 +481,7 @@ class AICompanionAgent extends BaseAgent {
       },
     ));
 
-    developer.log('Companion personality changed to $_personality', name: agentId);
+    developer.log('Companion personality changed to $_personality', name: _agentTypeId);
   }
 
   /// Get companion status and analytics
@@ -1171,7 +1171,7 @@ class AICompanionAgent extends BaseAgent {
       }
 
     } catch (e) {
-      developer.log('Error loading companion data: $e', name: agentId);
+      developer.log('Error loading companion data: $e', name: _agentTypeId);
     }
   }
 
@@ -1193,7 +1193,7 @@ class AICompanionAgent extends BaseAgent {
       await _prefs.setString('companion_personality', _personality.toString());
 
     } catch (e) {
-      developer.log('Error saving companion data: $e', name: agentId);
+      developer.log('Error saving companion data: $e', name: _agentTypeId);
     }
   }
 
@@ -2347,6 +2347,6 @@ class AICompanionAgent extends BaseAgent {
     // Save all data
     await _saveCompanionData();
 
-    developer.log('AI Companion Agent disposed', name: agentId);
+    developer.log('AI Companion Agent disposed', name: _agentTypeId);
   }
 }

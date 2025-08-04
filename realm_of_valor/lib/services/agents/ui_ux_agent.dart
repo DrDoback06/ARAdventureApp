@@ -261,7 +261,7 @@ class UIState {
 
 /// UI/UX Agent - Dynamic interface and notification management
 class UIUXAgent extends BaseAgent {
-  static const String agentId = 'ui_ux';
+  static const String _agentTypeId = 'ui_ux';
 
   final SharedPreferences _prefs;
 
@@ -293,7 +293,7 @@ class UIUXAgent extends BaseAgent {
   UIUXAgent({
     required SharedPreferences prefs,
   }) : _prefs = prefs,
-       super(agentId: agentId);
+       super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

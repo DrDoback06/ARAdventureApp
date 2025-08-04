@@ -99,7 +99,7 @@ class DataConflict {
 
 /// Data Persistence Agent - Centralized data management with Firebase integration
 class DataPersistenceAgent extends BaseAgent {
-  static const String agentId = 'data_persistence';
+  static const String _agentTypeId = 'data_persistence';
 
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
@@ -124,7 +124,7 @@ class DataPersistenceAgent extends BaseAgent {
 
   DataPersistenceAgent({
     required SharedPreferences prefs,
-  }) : _prefs = prefs, super(agentId: agentId);
+  }) : _prefs = prefs, super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {

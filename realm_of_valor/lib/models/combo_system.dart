@@ -1,10 +1,8 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
-import 'dart:async';
-import 'dart:math' as math;
-import 'package:uuid/uuid.dart';
-import 'battle_model.dart';
-import '../effects/particle_system.dart';
+import 'particle_type.dart';
 
+/// Different types of combo effects
 enum ComboType {
   elemental,    // Fire + Fire = Inferno
   opposing,     // Fire + Ice = Steam Explosion  

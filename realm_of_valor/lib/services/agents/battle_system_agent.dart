@@ -122,9 +122,9 @@ class Battle {
   bool get isFinished => state == BattleState.victory || state == BattleState.defeat || state == BattleState.fled;
 }
 
-/// Battle System Agent - Handle all combat mechanics and visual effects
+/// Battle System Agent - Turn-based combat mechanics
 class BattleSystemAgent extends BaseAgent {
-  static const String agentId = 'battle_system';
+  static const String _agentTypeId = 'battle_system';
 
   final Map<String, Battle> _activeBattles = {};
   final Map<String, Enemy> _enemyDatabase = {};
@@ -135,16 +135,16 @@ class BattleSystemAgent extends BaseAgent {
   static const double criticalHitMultiplier = 1.5;
   static const int fleeSuccessChance = 75; // 75% chance
 
-  BattleSystemAgent() : super(agentId: agentId);
+  BattleSystemAgent() : super(agentId: _agentTypeId);
 
   @override
   Future<void> onInitialize() async {
-    developer.log('Initializing Battle System Agent', name: agentId);
+    developer.log('Initializing Battle System Agent', name: _agentTypeId);
     
     // Initialize enemy database
     _initializeEnemyDatabase();
     
-    developer.log('Battle System Agent initialized', name: agentId);
+    developer.log('Battle System Agent initialized', name: _agentTypeId);
   }
 
   @override
@@ -197,7 +197,7 @@ class BattleSystemAgent extends BaseAgent {
     // Start the battle
     await _startBattleTurn(battleId);
 
-    developer.log('Battle started: $battleId vs ${enemy.name}', name: agentId);
+    developer.log('Battle started: $battleId vs ${enemy.name}', name: _agentTypeId);
 
     // Publish battle started event
     await publishEvent(createEvent(
@@ -571,7 +571,7 @@ class BattleSystemAgent extends BaseAgent {
     // Clean up
     _activeBattles.remove(battle.id);
 
-    developer.log('Battle ended: ${battle.id} - $finalState', name: agentId);
+    developer.log('Battle ended: ${battle.id} - $finalState', name: _agentTypeId);
   }
 
   /// Calculate XP reward
@@ -829,6 +829,6 @@ class BattleSystemAgent extends BaseAgent {
     }
     _activeBattles.clear();
     
-    developer.log('Battle System Agent disposed', name: agentId);
+    developer.log('Battle System Agent disposed', name: _agentTypeId);
   }
 }
