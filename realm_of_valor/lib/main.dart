@@ -19,6 +19,9 @@ import 'services/agents/battle_system_agent.dart';
 import 'services/agents/data_persistence_agent.dart';
 import 'services/agents/achievement_agent.dart';
 import 'services/agents/card_system_agent.dart';
+import 'services/agents/adventure_quest_agent.dart';
+import 'services/agents/location_services_agent.dart';
+import 'services/agents/ui_ux_agent.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -51,6 +54,9 @@ Future<void> _initializeAgentSystem() async {
     final dataAgent = DataPersistenceAgent(prefs: prefs);
     final achievementAgent = AchievementAgent();
     final cardAgent = CardSystemAgent(prefs: prefs);
+    final adventureAgent = AdventureQuestAgent(prefs: prefs);
+    final locationAgent = LocationServicesAgent(prefs: prefs);
+    final uiAgent = UIUXAgent(prefs: prefs);
     
     await AgentOrchestrator.instance.registerAgent(characterAgent);
     await AgentOrchestrator.instance.registerAgent(fitnessAgent);
@@ -58,6 +64,9 @@ Future<void> _initializeAgentSystem() async {
     await AgentOrchestrator.instance.registerAgent(dataAgent);
     await AgentOrchestrator.instance.registerAgent(achievementAgent);
     await AgentOrchestrator.instance.registerAgent(cardAgent);
+    await AgentOrchestrator.instance.registerAgent(adventureAgent);
+    await AgentOrchestrator.instance.registerAgent(locationAgent);
+    await AgentOrchestrator.instance.registerAgent(uiAgent);
     
     print('Agent system initialized successfully');
   } catch (e) {

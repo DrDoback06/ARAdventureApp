@@ -331,12 +331,17 @@ class EventTypes {
   // Achievement events
   static const String achievementUnlocked = 'achievement_unlocked';
   static const String achievementProgress = 'achievement_progress';
+  
+  // AR and adventure events
+  static const String arExperienceTriggered = 'ar_experience_triggered';
+  static const String questProgress = 'quest_progress';
 
   // UI events
   static const String uiNavigation = 'ui_navigation';
   static const String uiButtonPressed = 'ui_button_pressed';
   static const String uiWindowOpened = 'ui_window_opened';
   static const String uiWindowClosed = 'ui_window_closed';
+  static const String uiNotification = 'ui_notification';
 
   // System events
   static const String systemError = 'system_error';
