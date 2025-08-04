@@ -1,17 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../providers/battle_controller.dart';
+import '../providers/character_provider.dart';
 import '../models/battle_model.dart';
 import '../models/card_model.dart';
-import '../providers/battle_controller.dart';
-import '../widgets/battle_card_widget.dart';
 import '../widgets/player_portrait_widget.dart';
 import '../widgets/battle_log_widget.dart';
-import '../widgets/spell_counter_widget.dart';
-import '../widgets/spell_animation_widget.dart';
-import '../widgets/status_effect_overlay.dart';
-import '../widgets/drag_arrow_widget.dart';
-import '../widgets/simple_test_widget.dart';
+import '../widgets/three_hand_system_widget.dart';
+import '../widgets/enhanced_timer_widget.dart';
+import '../widgets/battle_rewards_widget.dart';
+import '../widgets/hearthstone_card_widget.dart';
+import '../widgets/visual_effects_widget.dart';
+import '../widgets/spell_counter_overlay_widget.dart';
+import '../widgets/battle_calculator_widget.dart';
+import '../services/battle_rewards_service.dart';
+import '../constants/theme.dart';
+import '../models/unified_particle_system.dart';
 import '../effects/particle_system.dart';
+import 'dart:math' as math;
 
 class BattleScreen extends StatefulWidget {
   final Battle battle;
@@ -83,6 +89,12 @@ class _BattleScreenState extends State<BattleScreen>
                     intensity: 0.5,
                     continuous: true,
                   ),
+                ),
+                
+                // Visual Effects Layer
+                VisualEffectsWidget(
+                  effects: battleController.visualEffects,
+                  child: const SizedBox.expand(),
                 ),
                 
                 // FORCE LOAD - Particle Test (will be visible when new code loads)
@@ -158,35 +170,25 @@ class _BattleScreenState extends State<BattleScreen>
                 if (battleController.battle.status == BattleStatus.finished)
                   _buildBattleResultDialog(battleController),
                 
-                // Real-Time Spell Counter Overlay - THE EPIC FINALE! ⚡
-                if (battleController.waitingForCounters)
-                  Builder(
-                    builder: (context) {
-                      final currentPlayer = battleController.getCurrentPlayer();
-                      if (currentPlayer == null) return const SizedBox();
-                      
-                      // Find counter spells in hand
-                      final availableCounters = currentPlayer.hand.where((card) => 
-                        card.type == ActionCardType.counter).toList();
-                      
-                      return SpellCounterWidget(
-                        spellCounterSystem: battleController.spellCounterSystem,
-                        currentPlayer: currentPlayer,
-                        onCounterAttempt: (counterSpell) {
-                          final success = battleController.attemptSpellCounter(counterSpell);
-                          if (success) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('⚡ ${counterSpell.name} cast as counter!'),
-                                backgroundColor: Colors.green,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          }
-                        },
-                      );
-                    },
+                // Enhanced Spell Counter Overlay with 8-second timer! ⚡
+                SpellCounterOverlayWidget(
+                  controller: battleController,
+                ),
+                
+                // Enhanced Timer Widget - Top Center
+                Positioned(
+                  top: 20,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: EnhancedTimerWidget(
+                      totalSeconds: 60,
+                      remainingSeconds: battleController.turnTimeRemaining,
+                      isActive: battleController.battle.currentPlayerId == battleController.getCurrentPlayer()?.id,
+                      playerName: battleController.getCurrentPlayer()?.name,
+                    ),
                   ),
+                ),
                 
                 // Spell Casting Animation Overlay - THE EPIC MAGIC SYSTEM! ✨⚡
                 // SpellAnimationWidget(
@@ -224,39 +226,30 @@ class _BattleScreenState extends State<BattleScreen>
                 //     ),
                 //   ),
                 
-                // DEBUG: Test if enhanced features are loading
-                Positioned(
-                  top: 50,
-                  right: 50,
-                  child: Container(
-                    width: 150,
-                    height: 50,
-                    color: Colors.red,
-                    child: const Center(
-                      child: Text(
-                        'CODE UPDATED!',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                // Battle Rewards Overlay
+                if (battleController.battleCompleted && battleController.battleRewards != null)
+                  Positioned.fill(
+                    child: Container(
+                      color: Colors.black.withOpacity(0.8),
+                      child: Center(
+                        child: BattleRewardsWidget(
+                          rewards: battleController.battleRewards!,
+                          performance: battleController.battlePerformance ?? BattlePerformance.average,
+                          characterProvider: context.read<CharacterProvider>(),
+                          onApplyRewards: () {
+                            Navigator.of(context).pop();
+                          },
+                        ),
                       ),
                     ),
                   ),
-                ),
                 
-                // DEBUG: Force drag test button
-                Positioned(
-                  top: 120,
-                  right: 50,
-                  child: Container(
-                    width: 100,
-                    height: 40,
-                    color: Colors.orange,
-                    child: const Center(
-                      child: Text(
-                        'DRAG TEST',
-                        style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+                // Battle Calculator Widget
+                if (battleController.getCurrentPlayer() != null)
+                  BattleCalculatorWidget(
+                    controller: battleController,
+                    currentPlayer: battleController.getCurrentPlayer()!,
                   ),
-                ),
               ],
             );
           },
@@ -471,11 +464,8 @@ class _BattleScreenState extends State<BattleScreen>
                     child: PlayerPortraitWidget(
                       player: players[1],
                       isActive: controller.battle.currentPlayerId == players[1].id,
-                      isOpponent: true,
-                      onTap: () => controller.selectTarget(players[1].id),
                       onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                       onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                      isValidDragTarget: controller.isValidDragTarget(players[1].id),
                       isHovered: controller.hoveredTargetId == players[1].id,
                       draggedCard: controller.draggedCard,
                       draggedAction: controller.draggedAction,
@@ -505,11 +495,8 @@ class _BattleScreenState extends State<BattleScreen>
                   child: PlayerPortraitWidget(
                     player: players[0],
                     isActive: controller.battle.currentPlayerId == players[0].id,
-                    isOpponent: false,
-                    onTap: () => controller.selectTarget(players[0].id),
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    isValidDragTarget: controller.isValidDragTarget(players[0].id),
                     isHovered: controller.hoveredTargetId == players[0].id,
                     draggedCard: controller.draggedCard,
                     draggedAction: controller.draggedAction,
@@ -537,11 +524,8 @@ class _BattleScreenState extends State<BattleScreen>
                   child: PlayerPortraitWidget(
                     player: players[1],
                     isActive: controller.battle.currentPlayerId == players[1].id,
-                    isOpponent: true,
-                    onTap: () => controller.selectTarget(players[1].id),
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    isValidDragTarget: controller.isValidDragTarget(players[1].id),
                     isHovered: controller.hoveredTargetId == players[1].id,
                     draggedCard: controller.draggedCard,
                     draggedAction: controller.draggedAction,
@@ -554,11 +538,10 @@ class _BattleScreenState extends State<BattleScreen>
                   child: PlayerPortraitWidget(
                     player: players[2],
                     isActive: controller.battle.currentPlayerId == players[2].id,
-                    isOpponent: true,
-                    onTap: () => controller.selectTarget(players[2].id),
+                    
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    isValidDragTarget: controller.isValidDragTarget(players[2].id),
+                    
                     isHovered: controller.hoveredTargetId == players[2].id,
                     draggedCard: controller.draggedCard,
                     draggedAction: controller.draggedAction,
@@ -584,11 +567,10 @@ class _BattleScreenState extends State<BattleScreen>
                 child: PlayerPortraitWidget(
                   player: players[0],
                   isActive: controller.battle.currentPlayerId == players[0].id,
-                  isOpponent: false,
-                  onTap: () => controller.selectTarget(players[0].id),
+                  
                   onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                   onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                  isValidDragTarget: controller.isValidDragTarget(players[0].id),
+                  
                   isHovered: controller.hoveredTargetId == players[0].id,
                   draggedCard: controller.draggedCard,
                   draggedAction: controller.draggedAction,
@@ -601,11 +583,10 @@ class _BattleScreenState extends State<BattleScreen>
                   child: PlayerPortraitWidget(
                     player: players[3],
                     isActive: controller.battle.currentPlayerId == players[3].id,
-                    isOpponent: false,
-                    onTap: () => controller.selectTarget(players[3].id),
+                    
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    isValidDragTarget: controller.isValidDragTarget(players[3].id),
+                    
                     isHovered: controller.hoveredTargetId == players[3].id,
                     draggedCard: controller.draggedCard,
                     draggedAction: controller.draggedAction,
@@ -632,11 +613,10 @@ class _BattleScreenState extends State<BattleScreen>
                   child: PlayerPortraitWidget(
                     player: players[i],
                     isActive: controller.battle.currentPlayerId == players[i].id,
-                    isOpponent: true,
-                    onTap: () => controller.selectTarget(players[i].id),
+                    
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    isValidDragTarget: controller.isValidDragTarget(players[i].id),
+                    
                     isHovered: controller.hoveredTargetId == players[i].id,
                     draggedCard: controller.draggedCard,
                     draggedAction: controller.draggedAction,
@@ -662,11 +642,10 @@ class _BattleScreenState extends State<BattleScreen>
                 child: PlayerPortraitWidget(
                   player: players[0],
                   isActive: controller.battle.currentPlayerId == players[0].id,
-                  isOpponent: false,
-                  onTap: () => controller.selectTarget(players[0].id),
+                  
                   onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                   onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                  isValidDragTarget: controller.isValidDragTarget(players[0].id),
+                  
                   isHovered: controller.hoveredTargetId == players[0].id,
                   draggedCard: controller.draggedCard,
                   draggedAction: controller.draggedAction,
@@ -679,11 +658,10 @@ class _BattleScreenState extends State<BattleScreen>
                   child: PlayerPortraitWidget(
                     player: players[i],
                     isActive: controller.battle.currentPlayerId == players[i].id,
-                    isOpponent: false,
-                    onTap: () => controller.selectTarget(players[i].id),
+                    
                     onCardDropped: (card, targetId) => controller.playCardOnTarget(card, targetId),
                     onAttackDropped: (targetId) => _performDragAttack(controller, targetId),
-                    isValidDragTarget: controller.isValidDragTarget(players[i].id),
+                    
                     isHovered: controller.hoveredTargetId == players[i].id,
                     draggedCard: controller.draggedCard,
                     draggedAction: controller.draggedAction,
@@ -867,52 +845,131 @@ class _BattleScreenState extends State<BattleScreen>
           ),
         ),
         const SizedBox(height: 8),
-        // Show available skills
+        // Show available skills as draggable cards
         ...currentPlayer.activeSkills.map((skill) => 
-          GestureDetector(
-            onTap: () => controller.useSkill(skill),
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 4),
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF16213e),
-                borderRadius: BorderRadius.circular(4),
-                border: Border.all(
-                  color: controller.canUseSkill(skill) 
-                      ? const Color(0xFFe94560) 
-                      : const Color(0xFFe94560).withOpacity(0.3),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Draggable<ActionCard>(
+              data: ActionCard(
+                id: skill.id,
+                name: skill.name,
+                description: skill.description,
+                cost: skill.cost,
+                type: ActionCardType.spell, // Use spell type for skills
+                effect: skill.effects.isNotEmpty ? skill.effects.first.toString() : 'damage:${skill.attack}',
+                rarity: CardRarity.common,
+              ),
+              onDragStarted: () {
+                print('[DRAG] Started dragging skill: ${skill.name}');
+                // Convert GameCard to ActionCard for drag handling
+                final actionCard = ActionCard(
+                  id: skill.id,
+                  name: skill.name,
+                  description: skill.description,
+                  cost: skill.cost,
+                  type: ActionCardType.spell, // Use spell type for skills
+                  effect: skill.effects.isNotEmpty ? skill.effects.first.toString() : 'damage:${skill.attack}',
+                  rarity: CardRarity.common,
+                );
+                controller.startSkillDrag(actionCard, Offset.zero);
+              },
+              onDragEnd: (details) {
+                print('[DRAG] Ended dragging skill');
+                controller.endDrag();
+              },
+              feedback: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: 100,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(8),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: 10,
+                        offset: const Offset(0, 5),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      skill.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
                 ),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    skill.name,
-                    style: TextStyle(
-                      color: controller.canUseSkill(skill) 
-                          ? Colors.white 
-                          : Colors.white.withOpacity(0.5),
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
+              childWhenDragging: Opacity(
+                opacity: 0.5,
+                child: Container(
+                  width: 100,
+                  height: 140,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF4CAF50),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.white, width: 2),
+                  ),
+                  child: Center(
+                    child: Text(
+                      skill.name,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
                   ),
-                  Text(
-                    'Cost: ${skill.cost} MP',
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 10,
-                    ),
+                ),
+              ),
+              child: Container(
+                width: 100,
+                height: 140,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF4CAF50),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: controller.canUseSkill(skill) 
+                        ? Colors.white 
+                        : Colors.grey,
+                    width: 2,
                   ),
-                  Text(
-                    skill.description,
-                    style: TextStyle(
-                      color: Colors.white.withOpacity(0.6),
-                      fontSize: 9,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      skill.name,
+                      style: TextStyle(
+                        color: controller.canUseSkill(skill) 
+                            ? Colors.white 
+                            : Colors.grey,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 10,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '${skill.cost} MP',
+                      style: TextStyle(
+                        color: controller.canUseSkill(skill) 
+                            ? Colors.white70 
+                            : Colors.grey,
+                        fontSize: 8,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -923,7 +980,7 @@ class _BattleScreenState extends State<BattleScreen>
 
   Widget _buildPlayerActions(BattleController controller) {
     return Container(
-      height: 180,
+      height: 160,
       decoration: const BoxDecoration(
         color: Color(0xFF0f3460),
         border: Border(
@@ -932,89 +989,22 @@ class _BattleScreenState extends State<BattleScreen>
       ),
       child: Column(
         children: [
+          // Three Hand System (Action Cards, Skills, Inventory)
+          Container(
+            height: 200,
+            child: ThreeHandSystemWidget(
+              controller: controller,
+              currentPlayer: controller.getCurrentPlayer()!,
+              isCurrentPlayer: controller.battle.currentPlayerId == controller.getCurrentPlayer()?.id,
+            ),
+          ),
+          
           // Action Buttons
           Container(
-            height: 50,
-            padding: const EdgeInsets.all(8),
+            height: 30,
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             child: Row(
               children: [
-<<<<<<< HEAD
-                _buildActionButton(
-                  'Attack',
-                  Icons.local_fire_department,
-                  controller.canAttack(),
-                  () => controller.performAttack(),
-                ),
-=======
-                controller.canAttack()
-                    ? Listener(
-                        onPointerDown: (event) {
-                          controller.startAttackDrag(event.position);
-                        },
-                        onPointerMove: (event) {
-                          controller.updateDragPosition(event.position);
-                        },
-                        onPointerUp: (event) {
-                          controller.endDrag();
-                        },
-                        child: Draggable<String>(
-                          data: 'ATTACK',
-                          feedback: Material(
-                            color: Colors.transparent,
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFe94560),
-                                borderRadius: BorderRadius.circular(20),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.3),
-                                    blurRadius: 10,
-                                    offset: const Offset(0, 5),
-                                  ),
-                                ],
-                              ),
-                              child: const Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(Icons.flash_on, color: Colors.white, size: 20),
-                                  SizedBox(width: 4),
-                                  Text(
-                                    'ATTACK',
-                                    style: TextStyle(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          childWhenDragging: Opacity(
-                            opacity: 0.5,
-                            child: _buildActionButton(
-                              'Attack',
-                              Icons.flash_on,
-                              false,
-                              () {},
-                            ),
-                          ),
-                          child: _buildActionButton(
-                            'Attack',
-                            Icons.flash_on,
-                            controller.canAttack(),
-                            () => controller.performAttack(),
-                          ),
-                        ),
-                      )
-                    : _buildActionButton(
-                        'Attack',
-                        Icons.flash_on,
-                        controller.canAttack(),
-                        () => controller.performAttack(),
-                      ),
->>>>>>> 50b85f912312c6fcf5474ed3ba6ab3f972f1d531
-                const SizedBox(width: 8),
                 _buildActionButton(
                   'End Turn',
                   Icons.skip_next,
@@ -1025,19 +1015,19 @@ class _BattleScreenState extends State<BattleScreen>
                 
                 // Mana Display
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(
                     color: const Color(0xFF16213e),
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: BorderRadius.circular(15),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.water_drop, color: Colors.blue, size: 16),
-                      const SizedBox(width: 4),
+                      const Icon(Icons.water_drop, color: Colors.blue, size: 12),
+                      const SizedBox(width: 2),
                       Text(
                         '${controller.getCurrentPlayer()?.currentMana ?? 0}/${controller.getCurrentPlayer()?.maxMana ?? 0}',
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 10),
                       ),
                     ],
                   ),
@@ -1049,7 +1039,7 @@ class _BattleScreenState extends State<BattleScreen>
           // Hand Cards
           Expanded(
             child: Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(4),
               child: _buildHandCards(controller),
             ),
           ),
@@ -1095,61 +1085,62 @@ class _BattleScreenState extends State<BattleScreen>
         return Container(
           width: 100,
           margin: const EdgeInsets.only(right: 8),
-          child: canPlay 
-              ? Listener(
-                  onPointerDown: (event) {
-                    controller.startCardDrag(card, event.position);
-                  },
-                  onPointerMove: (event) {
-                    controller.updateDragPosition(event.position);
-                  },
-                  onPointerUp: (event) {
-                    controller.endDrag();
-                  },
-                  child: Draggable<ActionCard>(
-                    data: card,
-                    feedback: Material(
-                      color: Colors.transparent,
-                      child: Transform.scale(
-                        scale: 1.2,
-                        child: Container(
-                          width: 100,
-                          child: BattleCardWidget(
-                            card: card,
-                            canPlay: true,
-                            isSelected: true,
-                            onTap: () {},
-                            onPlay: () {},
-                          ),
-                        ),
-                      ),
+          child: Draggable<ActionCard>(
+            data: card,
+            onDragStarted: () {
+              print('[DRAG] Started dragging hand card: ${card.name}');
+              controller.startCardDrag(card, Offset.zero);
+            },
+            onDragEnd: (details) {
+              print('[DRAG] Ended dragging hand card');
+              controller.endDrag();
+            },
+            feedback: Material(
+              color: Colors.transparent,
+              child: Container(
+                width: 100,
+                height: 140,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFe94560),
+                  borderRadius: BorderRadius.circular(8),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 10,
+                      offset: const Offset(0, 5),
                     ),
-                    childWhenDragging: Opacity(
-                      opacity: 0.5,
-                      child: BattleCardWidget(
-                        card: card,
-                        canPlay: false,
-                        isSelected: false,
-                        onTap: () {},
-                        onPlay: () {},
-                      ),
-                    ),
-                    child: BattleCardWidget(
-                      card: card,
-                      canPlay: canPlay,
-                      isSelected: controller.selectedCard == card,
-                      onTap: () => controller.selectCard(card),
-                      onPlay: () => controller.playCard(card),
-                    ),
-                  ),
-                )
-              : BattleCardWidget(
-                  card: card,
-                  canPlay: canPlay,
-                  isSelected: controller.selectedCard == card,
-                  onTap: () => controller.selectCard(card),
-                  onPlay: () => controller.playCard(card),
+                  ],
                 ),
+                child: Center(
+                  child: Text(
+                    card.name,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+            childWhenDragging: Opacity(
+              opacity: 0.5,
+              child: HearthstoneCardWidget(
+                card: card,
+                controller: controller,
+                canPlay: false,
+                isGhost: controller.ghostCardsInHand.contains(card.id),
+              ),
+            ),
+            child: HearthstoneCardWidget(
+              card: card,
+              controller: controller,
+              canPlay: canPlay,
+              isGhost: controller.ghostCardsInHand.contains(card.id),
+              onTap: () => controller.selectCard(card),
+            ),
+          ),
         );
       },
     );
@@ -1218,12 +1209,11 @@ class _BattleScreenState extends State<BattleScreen>
               Container(
                 width: 200,
                 height: 280,
-                child: BattleCardWidget(
+                child: HearthstoneCardWidget(
                   card: drawnCard,
+                  controller: controller,
                   canPlay: true,
-                  isSelected: false,
                   onTap: () {},
-                  onPlay: () {},
                 ),
               ),
               

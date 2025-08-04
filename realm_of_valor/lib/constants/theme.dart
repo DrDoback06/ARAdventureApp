@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/card_model.dart';
+import '../models/card_model.dart' show CardRarity;
 
 class RealmOfValorTheme {
   // Primary Colors - Dark whimsical theme
@@ -73,7 +73,7 @@ class RealmOfValorTheme {
       ),
       
       // Card Theme
-      cardTheme: const CardThemeData(
+      cardTheme: const CardTheme(
         color: surfaceMedium,
         elevation: 8,
         shadowColor: shadowBlack,
@@ -199,7 +199,7 @@ class RealmOfValorTheme {
       ),
       
       // Tab Bar Theme
-      tabBarTheme: const TabBarThemeData(
+      tabBarTheme: const TabBarTheme(
         labelColor: accentGold,
         unselectedLabelColor: textSecondary,
         indicatorColor: accentGold,
@@ -231,7 +231,7 @@ class RealmOfValorTheme {
       ),
       
       // Dialog Theme
-      dialogTheme: const DialogThemeData(
+      dialogTheme: const DialogTheme(
         backgroundColor: surfaceMedium,
         elevation: 24,
         shadowColor: shadowBlack,

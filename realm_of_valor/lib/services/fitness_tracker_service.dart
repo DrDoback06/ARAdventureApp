@@ -1,742 +1,1058 @@
-import 'dart:async';
-import 'dart:math' as math;
-import 'package:flutter/services.dart';
-import 'package:health/health.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/physical_activity_model.dart';
-import '../models/character_model.dart';
+import '../providers/character_provider.dart';
+import '../services/achievement_service.dart';
+import '../services/character_progression_service.dart';
+import '../services/character_service.dart';
 
-enum FitnessTracker {
-  appleWatch,
-  wearOS,
-  fitbit,
-  garmin,
-  samsung,
-  polar,
-  suunto,
-  generic,
+enum FitnessActivityType {
+  walking,
+  running,
+  cycling,
+  swimming,
+  yoga,
+  steps,
+  weightlifting,
+  hiking,
+  dancing,
+  tennis,
+  basketball,
 }
 
-enum HeartRateZone {
-  resting,    // < 50% max HR
-  fatBurn,    // 50-60% max HR
-  aerobic,    // 60-70% max HR  
-  anaerobic,  // 70-85% max HR
-  peak,       // 85%+ max HR
+enum FitnessTrackerType {
+  steps,
+  distance,
+  calories,
+  heartRate,
+  workoutDuration,
+  flexibility,
+  balance,
 }
 
-class RealTimeMetrics {
-  final int? heartRate;
-  final HeartRateZone? heartRateZone;
-  final int steps;
-  final double calories;
-  final double distance;
-  final bool isWorkingOut;
-  final double energyLevel; // 0.0 to 1.0
-  final double stressLevel; // 0.0 to 1.0
+class FitnessActivity {
+  final String id;
+  final FitnessActivityType type;
+  final double value;
+  final String unit;
   final DateTime timestamp;
+  final String? description;
+  final Map<String, dynamic>? metadata;
 
-  RealTimeMetrics({
-    this.heartRate,
-    this.heartRateZone,
-    this.steps = 0,
-    this.calories = 0.0,
+  const FitnessActivity({
+    required this.id,
+    required this.type,
+    required this.value,
+    required this.unit,
+    required this.timestamp,
+    this.description,
+    this.metadata,
+  });
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type.name,
+      'value': value,
+      'unit': unit,
+      'timestamp': timestamp.millisecondsSinceEpoch,
+      'description': description,
+      'metadata': metadata,
+    };
+  }
+
+  factory FitnessActivity.fromJson(Map<String, dynamic> json) {
+    return FitnessActivity(
+      id: json['id'],
+      type: FitnessActivityType.values.firstWhere(
+        (e) => e.name == json['type'],
+      ),
+      value: json['value'].toDouble(),
+      unit: json['unit'],
+      timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp']),
+      description: json['description'],
+      metadata: json['metadata'],
+    );
+  }
+}
+
+class WorkoutSession {
+  final String id;
+  final FitnessActivityType activityType;
+  final DateTime startTime;
+  DateTime? endTime;
+  Duration duration;
+  int caloriesBurned;
+  double distance;
+  int steps;
+  int heartRate;
+
+  WorkoutSession({
+    required this.id,
+    required this.activityType,
+    required this.startTime,
+    this.endTime,
+    this.duration = Duration.zero,
+    this.caloriesBurned = 0,
     this.distance = 0.0,
-    this.isWorkingOut = false,
-    this.energyLevel = 0.7,
-    this.stressLevel = 0.5,
-    DateTime? timestamp,
-  }) : timestamp = timestamp ?? DateTime.now();
+    this.steps = 0,
+    this.heartRate = 0,
+  });
 
-  Map<String, dynamic> toJson() {
-    return {
-      'heartRate': heartRate,
-      'heartRateZone': heartRateZone?.toString(),
-      'steps': steps,
-      'calories': calories,
-      'distance': distance,
-      'isWorkingOut': isWorkingOut,
-      'energyLevel': energyLevel,
-      'stressLevel': stressLevel,
-      'timestamp': timestamp.toIso8601String(),
-    };
-  }
-}
-
-class FitnessStatBoosts {
-  final List<StatBoost> realTimeBoosts;
-  final List<StatBoost> dailyBoosts;
-  final List<StatBoost> weeklyBoosts;
-  final Map<String, double> multipliers;
-
-  FitnessStatBoosts({
-    List<StatBoost>? realTimeBoosts,
-    List<StatBoost>? dailyBoosts,
-    List<StatBoost>? weeklyBoosts,
-    Map<String, double>? multipliers,
-  })  : realTimeBoosts = realTimeBoosts ?? <StatBoost>[],
-        dailyBoosts = dailyBoosts ?? <StatBoost>[],
-        weeklyBoosts = weeklyBoosts ?? <StatBoost>[],
-        multipliers = multipliers ?? <String, double>{};
-
-  List<StatBoost> get allActiveBoosts {
-    return [
-      ...realTimeBoosts,
-      ...dailyBoosts,
-      ...weeklyBoosts,
-    ].where((boost) => !boost.isExpired).toList();
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'realTimeBoosts': realTimeBoosts.map((b) => b.toJson()).toList(),
-      'dailyBoosts': dailyBoosts.map((b) => b.toJson()).toList(),
-      'weeklyBoosts': weeklyBoosts.map((b) => b.toJson()).toList(),
-      'multipliers': multipliers,
-    };
-  }
-}
-
-class FitnessTrackerService {
-  static final FitnessTrackerService _instance = FitnessTrackerService._internal();
-  factory FitnessTrackerService() => _instance;
-  FitnessTrackerService._internal();
-
-  // Platform channels for native integrations
-  static const MethodChannel _appleWatchChannel = MethodChannel('apple_watch');
-  static const MethodChannel _wearOSChannel = MethodChannel('wear_os');
-  static const MethodChannel _fitbitChannel = MethodChannel('fitbit');
-  static const MethodChannel _garminChannel = MethodChannel('garmin');
-
-  // Health plugin for cross-platform health data
-  final Health _health = Health();
-
-  // State management
-  Timer? _realTimeTimer;
-  final StreamController<RealTimeMetrics> _metricsController = 
-      StreamController<RealTimeMetrics>.broadcast();
-  final StreamController<FitnessStatBoosts> _boostsController = 
-      StreamController<FitnessStatBoosts>.broadcast();
-
-  RealTimeMetrics? _latestMetrics;
-  FitnessStatBoosts _currentBoosts = FitnessStatBoosts();
-  Set<FitnessTracker> _connectedTrackers = <FitnessTracker>{};
-  int _maxHeartRate = 190; // Default, should be calculated or configured per user
-
-  // Streams for external listening
-  Stream<RealTimeMetrics> get metricsStream => _metricsController.stream;
-  Stream<FitnessStatBoosts> get boostsStream => _boostsController.stream;
-  
-  // Getters
-  RealTimeMetrics? get latestMetrics => _latestMetrics;
-  FitnessStatBoosts get currentBoosts => _currentBoosts;
-  Set<FitnessTracker> get connectedTrackers => Set.from(_connectedTrackers);
-
-  // Initialize the fitness tracker service
-  Future<bool> initialize() async {
-    try {
-      // Request permissions for health data
-      final types = [
-        HealthDataType.HEART_RATE,
-        HealthDataType.STEPS,
-        HealthDataType.ACTIVE_ENERGY_BURNED,
-        HealthDataType.DISTANCE_WALKING_RUNNING,
-        HealthDataType.WORKOUT,
-      ];
-
-      final permissions = await _health.requestAuthorization(types);
-      if (!permissions) {
-        print('Health permissions not granted');
-        return false;
-      }
-
-      await loadPreferences();
-      await _startRealTimeMonitoring();
-      
-      return true;
-    } catch (e) {
-      print('Error initializing fitness tracker: $e');
-      return false;
-    }
-  }
-
-  // Start real-time monitoring
-  Future<void> _startRealTimeMonitoring() async {
-    _realTimeTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
-      await _updateRealTimeMetrics();
-    });
-
-    // Initial update
-    await _updateRealTimeMetrics();
-  }
-
-  // Update real-time metrics
-  Future<void> _updateRealTimeMetrics() async {
-    try {
-      final now = DateTime.now();
-      final startTime = now.subtract(const Duration(minutes: 5));
-
-      // Get latest health data
-      final healthData = await _health.getHealthDataFromTypes(
-        types: [
-          HealthDataType.HEART_RATE,
-          HealthDataType.STEPS,
-          HealthDataType.ACTIVE_ENERGY_BURNED,
-          HealthDataType.DISTANCE_WALKING_RUNNING,
-        ],
-        startTime: startTime,
-        endTime: now,
-      );
-
-      int? latestHeartRate;
-      int totalSteps = 0;
-      double totalCalories = 0;
-      double totalDistance = 0;
-
-      for (var point in healthData) {
-        if (point.value is NumericHealthValue) {
-          final value = (point.value as NumericHealthValue).numericValue;
-          
-          switch (point.type) {
-            case HealthDataType.HEART_RATE:
-              latestHeartRate = value.toInt();
-              break;
-            case HealthDataType.STEPS:
-              totalSteps += value.toInt();
-              break;
-            case HealthDataType.ACTIVE_ENERGY_BURNED:
-              totalCalories += value.toDouble();
-              break;
-            case HealthDataType.DISTANCE_WALKING_RUNNING:
-              totalDistance += value.toDouble();
-              break;
-            default:
-              break;
-          }
-        }
-      }
-
-      // Calculate heart rate zone
-      HeartRateZone? heartRateZone;
-      if (latestHeartRate != null) {
-        final hrPercent = latestHeartRate / _maxHeartRate;
-        if (hrPercent < 0.5) {
-          heartRateZone = HeartRateZone.resting;
-        } else if (hrPercent < 0.6) {
-          heartRateZone = HeartRateZone.fatBurn;
-        } else if (hrPercent < 0.7) {
-          heartRateZone = HeartRateZone.aerobic;
-        } else if (hrPercent < 0.85) {
-          heartRateZone = HeartRateZone.anaerobic;
-        } else {
-          heartRateZone = HeartRateZone.peak;
-        }
-      }
-
-      // Detect if user is working out (simplified logic)
-      final isWorkingOut = latestHeartRate != null && 
-                          latestHeartRate > (_maxHeartRate * 0.6) &&
-                          totalSteps > 50; // Moving with elevated heart rate
-
-      // Create metrics object
-      final metrics = RealTimeMetrics(
-        heartRate: latestHeartRate,
-        heartRateZone: heartRateZone,
-        steps: totalSteps,
-        calories: totalCalories,
-        distance: totalDistance,
-        isWorkingOut: isWorkingOut,
-        energyLevel: _calculateEnergyLevel(latestHeartRate, totalSteps),
-        stressLevel: _calculateStressLevel(latestHeartRate),
-      );
-
-      _latestMetrics = metrics;
-      _metricsController.add(metrics);
-
-      // Update stat boosts based on current metrics
-      await _updateStatBoosts(metrics);
-
-    } catch (e) {
-      print('Error updating real-time metrics: $e');
-    }
-  }
-
-  // Calculate energy level based on activity
-  double _calculateEnergyLevel(int? heartRate, int steps) {
-    double energy = 0.7; // Base energy level
-
-    // Heart rate contribution
-    if (heartRate != null) {
-      final hrPercent = heartRate / _maxHeartRate;
-      if (hrPercent > 0.8) {
-        energy = math.max(0.9, energy); // High intensity = high energy
-      } else if (hrPercent < 0.4) {
-        energy = math.min(0.5, energy); // Very low HR = low energy
-      }
-    }
-
-    // Steps contribution (recent activity)
-    if (steps > 100) {
-      energy = math.min(1.0, energy + 0.2);
-    } else if (steps < 10) {
-      energy = math.max(0.3, energy - 0.2);
-    }
-
-    return energy.clamp(0.0, 1.0);
-  }
-
-  // Calculate stress level based on heart rate variability (simplified)
-  double _calculateStressLevel(int? heartRate) {
-    if (heartRate == null) return 0.5;
-
-    final hrPercent = heartRate / _maxHeartRate;
-    
-    // High heart rate when not exercising indicates stress
-    if (hrPercent > 0.7 && !(_latestMetrics?.isWorkingOut ?? false)) {
-      return 0.8;
-    } else if (hrPercent < 0.4) {
-      return 0.2; // Very relaxed
-    }
-    
-    return 0.4; // Normal
-  }
-
-  // Update stat boosts based on current metrics
-  Future<void> _updateStatBoosts(RealTimeMetrics metrics) async {
-    final realTimeBoosts = <StatBoost>[];
-    final multipliers = <String, double>{};
-
-    // Heart rate zone effects
-    if (metrics.heartRateZone != null) {
-      switch (metrics.heartRateZone!) {
-        case HeartRateZone.resting:
-          realTimeBoosts.add(StatBoost(
-            name: 'Resting State',
-            description: 'Calm and focused mind',
-            statType: 'intelligence',
-            bonusValue: 5,
-            sourceActivity: ActivityType.other,
-            expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-          ));
-          break;
-        case HeartRateZone.fatBurn:
-          realTimeBoosts.add(StatBoost(
-            name: 'Fat Burn Zone',
-            description: 'Optimal metabolism for endurance',
-            statType: 'vitality',
-            bonusValue: 8,
-            sourceActivity: ActivityType.cardio,
-            expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-          ));
-          break;
-        case HeartRateZone.aerobic:
-          realTimeBoosts.add(StatBoost(
-            name: 'Aerobic Power',
-            description: 'Enhanced cardiovascular performance',
-            statType: 'vitality',
-            bonusValue: 12,
-            sourceActivity: ActivityType.cardio,
-            expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-          ));
-          realTimeBoosts.add(StatBoost(
-            name: 'Athletic Prowess',
-            description: 'Active heart rate boosts agility',
-            statType: 'dexterity',
-            bonusValue: 6,
-            sourceActivity: ActivityType.cardio,
-            expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-          ));
-          break;
-        case HeartRateZone.anaerobic:
-          realTimeBoosts.add(StatBoost(
-            name: 'Anaerobic Power',
-            description: 'High intensity training effects',
-            statType: 'strength',
-            bonusValue: 15,
-            sourceActivity: ActivityType.cardio,
-            expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-          ));
-          multipliers['combat_damage'] = 1.2;
-          break;
-        case HeartRateZone.peak:
-          realTimeBoosts.add(StatBoost(
-            name: 'Peak Performance',
-            description: 'Maximum effort unleashes potential',
-            statType: 'strength',
-            bonusValue: 20,
-            sourceActivity: ActivityType.cardio,
-            expiresAt: DateTime.now().add(const Duration(minutes: 30)),
-          ));
-          multipliers['combat_damage'] = 1.4;
-          multipliers['movement_speed'] = 1.3;
-          break;
-      }
-    }
-
-    // Energy level effects
-    if (metrics.energyLevel > 0.8) {
-      realTimeBoosts.add(StatBoost(
-        name: 'High Energy',
-        description: 'Feeling energized and ready for action',
-        statType: 'vitality',
-        bonusValue: 10,
-        sourceActivity: ActivityType.other,
-        expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      ));
-      multipliers['experience_gain'] = 1.15;
-    } else if (metrics.energyLevel < 0.3) {
-      realTimeBoosts.add(StatBoost(
-        name: 'Exhausted',
-        description: 'Low energy affects performance',
-        statType: 'vitality',
-        bonusValue: -5,
-        sourceActivity: ActivityType.other,
-        expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      ));
-      multipliers['experience_gain'] = 0.9;
-    }
-
-    // Workout bonus
-    if (metrics.isWorkingOut) {
-      realTimeBoosts.add(StatBoost(
-        name: 'Active Workout',
-        description: 'Currently exercising - all stats boosted!',
-        statType: 'all',
-        bonusValue: 8,
-        sourceActivity: ActivityType.other,
-        expiresAt: DateTime.now().add(const Duration(minutes: 45)),
-      ));
-      multipliers['experience_gain'] = 1.25;
-      multipliers['loot_chance'] = 1.1;
-    }
-
-    // Get daily activity boosts
-    final dailyBoosts = await _getDailyActivityBoosts();
-    final weeklyBoosts = await _getWeeklyActivityBoosts();
-
-    _currentBoosts = FitnessStatBoosts(
-      realTimeBoosts: realTimeBoosts,
-      dailyBoosts: dailyBoosts,
-      weeklyBoosts: weeklyBoosts,
-      multipliers: multipliers,
+  WorkoutSession copyWith({
+    DateTime? endTime,
+    Duration? duration,
+    int? caloriesBurned,
+    double? distance,
+    int? steps,
+    int? heartRate,
+  }) {
+    return WorkoutSession(
+      id: id,
+      activityType: activityType,
+      startTime: startTime,
+      endTime: endTime ?? this.endTime,
+      duration: duration ?? this.duration,
+      caloriesBurned: caloriesBurned ?? this.caloriesBurned,
+      distance: distance ?? this.distance,
+      steps: steps ?? this.steps,
+      heartRate: heartRate ?? this.heartRate,
     );
   }
 
-  // Get daily activity boosts
-  Future<List<StatBoost>> _getDailyActivityBoosts() async {
-    final boosts = <StatBoost>[];
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'activityType': activityType.name,
+      'startTime': startTime.toIso8601String(),
+      'endTime': endTime?.toIso8601String(),
+      'duration': duration.inMilliseconds,
+      'caloriesBurned': caloriesBurned,
+      'distance': distance,
+      'steps': steps,
+      'heartRate': heartRate,
+    };
+  }
+
+  factory WorkoutSession.fromJson(Map<String, dynamic> json) {
+    return WorkoutSession(
+      id: json['id'] as String,
+      activityType: FitnessActivityType.values.firstWhere(
+        (e) => e.name == json['activityType'],
+      ),
+      startTime: DateTime.parse(json['startTime'] as String),
+      endTime: json['endTime'] != null ? DateTime.parse(json['endTime'] as String) : null,
+      duration: Duration(milliseconds: json['duration'] as int),
+      caloriesBurned: json['caloriesBurned'] as int,
+      distance: json['distance'] as double,
+      steps: json['steps'] as int,
+      heartRate: json['heartRate'] as int,
+    );
+  }
+}
+
+class FitnessTrackerService extends ChangeNotifier {
+  static FitnessTrackerService? _instance;
+  static FitnessTrackerService get instance => _instance ??= FitnessTrackerService._();
+  FitnessTrackerService._();
+
+  late SharedPreferences _prefs;
+  bool _isInitialized = false;
+
+  // Fitness tracking state
+  FitnessTrackerType _currentTracker = FitnessTrackerType.steps;
+  bool _isTracking = false;
+  List<FitnessActivity> _activities = [];
+  Map<FitnessActivityType, double> _dailyTotals = {};
+  Map<FitnessActivityType, double> _weeklyTotals = {};
+  Map<FitnessActivityType, double> _monthlyTotals = {};
+
+  // Workout session tracking
+  WorkoutSession? _currentSession;
+  List<WorkoutSession> _workoutSessions = [];
+
+  // Character progression integration
+  CharacterProgressionService? _characterProgression;
+  CharacterService? _characterService;
+
+  // Getters
+  FitnessTrackerType get currentTracker => _currentTracker;
+  bool get isTracking => _isTracking;
+  List<FitnessActivity> get activities => List.unmodifiable(_activities);
+  Map<FitnessActivityType, double> get dailyTotals => Map.unmodifiable(_dailyTotals);
+  Map<FitnessActivityType, double> get weeklyTotals => Map.unmodifiable(_weeklyTotals);
+  Map<FitnessActivityType, double> get monthlyTotals => Map.unmodifiable(_monthlyTotals);
+
+  // Initialize service
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    _prefs = await SharedPreferences.getInstance();
+    await _loadFitnessData();
+    _isInitialized = true;
+    notifyListeners();
+  }
+
+  // Set character services for integration
+  void setCharacterServices(CharacterProgressionService progression, CharacterService? character) {
+    _characterProgression = progression;
+    _characterService = character;
+  }
+
+  // Load fitness data from preferences
+  Future<void> _loadFitnessData() async {
+    final trackerIndex = _prefs.getInt('fitness_tracker_type') ?? 0;
+    _currentTracker = FitnessTrackerType.values[trackerIndex];
+    _isTracking = _prefs.getBool('fitness_is_tracking') ?? false;
+
+    // Load activities
+    final activitiesJson = _prefs.getStringList('fitness_activities') ?? [];
+    _activities = activitiesJson
+        .map((json) => FitnessActivity.fromJson(Map<String, dynamic>.from(json as Map)))
+        .toList();
+
+    // Load workout sessions
+    final workoutSessionsJson = _prefs.getStringList('fitness_workout_sessions') ?? [];
+    _workoutSessions = workoutSessionsJson
+        .map((json) => WorkoutSession.fromJson(Map<String, dynamic>.from(json as Map)))
+        .toList();
+
+    // Calculate totals
+    _calculateTotals();
+  }
+
+  // Save fitness data to preferences
+  Future<void> _saveFitnessData() async {
+    await _prefs.setInt('fitness_tracker_type', _currentTracker.index);
+    await _prefs.setBool('fitness_is_tracking', _isTracking);
+
+    // Save activities
+    final activitiesJson = _activities
+        .map((activity) => activity.toJson())
+        .map((json) => json.toString())
+        .toList();
+    await _prefs.setStringList('fitness_activities', activitiesJson);
+
+    // Save workout sessions
+    final workoutSessionsJson = _workoutSessions
+        .map((session) => session.toJson())
+        .map((json) => json.toString())
+        .toList();
+    await _prefs.setStringList('fitness_workout_sessions', workoutSessionsJson);
+  }
+
+  // Start fitness tracking
+  Future<void> startTracking(FitnessTrackerType trackerType) async {
+    _currentTracker = trackerType;
+    _isTracking = true;
+    await _saveFitnessData();
+    notifyListeners();
+  }
+
+  // Stop fitness tracking
+  Future<void> stopTracking() async {
+    _isTracking = false;
+    await _saveFitnessData();
+    notifyListeners();
+  }
+
+  // Add fitness activity
+  Future<void> addActivity(FitnessActivity activity) async {
+    // Ensure service is initialized
+    if (!_isInitialized) {
+      await initialize();
+    }
+    
+    _activities.add(activity);
+    
+    // Keep only last 1000 activities
+    if (_activities.length > 1000) {
+      _activities.removeRange(0, _activities.length - 1000);
+    }
+
+    _calculateTotals();
+    await _saveFitnessData();
+    
+    // Award XP based on activity
+    await _awardFitnessXP(activity);
+    
+    notifyListeners();
+  }
+
+  // Add manual activity
+  Future<void> addManualActivity(
+    FitnessActivityType type,
+    double value,
+    String unit,
+    String? description,
+  ) async {
+    final activity = FitnessActivity(
+      id: 'manual_${DateTime.now().millisecondsSinceEpoch}',
+      type: type,
+      value: value,
+      unit: unit,
+      timestamp: DateTime.now(),
+      description: description,
+      metadata: {
+        'source': 'manual',
+        'tracker': _currentTracker.name,
+      },
+    );
+
+    await addActivity(activity);
+  }
+
+  // Add distance traveled for quest completion
+  Future<void> addQuestDistance(double distanceMeters, String questName) async {
+    // Ensure service is initialized
+    if (!_isInitialized) {
+      await initialize();
+    }
+    
+    final activity = FitnessActivity(
+      id: 'quest_${DateTime.now().millisecondsSinceEpoch}',
+      type: FitnessActivityType.walking,
+      value: distanceMeters,
+      unit: 'meters',
+      timestamp: DateTime.now(),
+      description: 'Quest completion: $questName',
+      metadata: {
+        'source': 'quest',
+        'quest_name': questName,
+        'tracker': _currentTracker.name,
+      },
+    );
+
+    await addActivity(activity);
+  }
+
+  // Start a workout session
+  void startWorkoutSession(FitnessActivityType activityType) {
+    final session = WorkoutSession(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      activityType: activityType,
+      startTime: DateTime.now(),
+      duration: Duration.zero,
+      caloriesBurned: 0,
+      distance: 0.0,
+      steps: 0,
+      heartRate: 0,
+    );
+    
+    _currentSession = session;
+    _workoutSessions.add(session);
+    notifyListeners();
+    
+    if (kDebugMode) {
+      print('[FitnessTrackerService] Started workout: ${activityType.name}');
+    }
+  }
+
+  // End the current workout session
+  void endWorkoutSession() {
+    if (_currentSession != null) {
+      final endTime = DateTime.now();
+      final duration = endTime.difference(_currentSession!.startTime);
+      
+      _currentSession = _currentSession!.copyWith(
+        endTime: endTime,
+        duration: duration,
+        caloriesBurned: _calculateCaloriesBurned(_currentSession!.activityType, duration),
+        distance: _calculateDistance(_currentSession!.activityType, duration),
+        steps: _calculateSteps(_currentSession!.activityType, duration),
+        heartRate: _calculateHeartRate(_currentSession!.activityType, duration),
+      );
+      
+      // Apply stat boosts based on workout
+      _applyWorkoutRewards(_currentSession!);
+      
+      _currentSession = null;
+      notifyListeners();
+      
+      if (kDebugMode) {
+        print('[FitnessTrackerService] Ended workout session');
+      }
+    }
+  }
+
+  // Update current session with real-time data
+  void updateSessionProgress({
+    int? steps,
+    double? distance,
+    int? heartRate,
+    int? calories,
+  }) {
+    if (_currentSession != null) {
+      _currentSession = _currentSession!.copyWith(
+        steps: steps ?? _currentSession!.steps,
+        distance: distance ?? _currentSession!.distance,
+        heartRate: heartRate ?? _currentSession!.heartRate,
+        caloriesBurned: calories ?? _currentSession!.caloriesBurned,
+      );
+      notifyListeners();
+    }
+  }
+
+  // Calculate calories burned based on activity type and duration
+  int _calculateCaloriesBurned(FitnessActivityType activityType, Duration duration) {
+    final minutes = duration.inMinutes;
+    final caloriesPerMinute = _getCaloriesPerMinute(activityType);
+    return (minutes * caloriesPerMinute).round();
+  }
+
+  // Calculate distance based on activity type and duration
+  double _calculateDistance(FitnessActivityType activityType, Duration duration) {
+    final minutes = duration.inMinutes;
+    final speedKmh = _getSpeedKmh(activityType);
+    return (minutes * speedKmh / 60.0);
+  }
+
+  // Calculate steps based on activity type and duration
+  int _calculateSteps(FitnessActivityType activityType, Duration duration) {
+    final minutes = duration.inMinutes;
+    final stepsPerMinute = _getStepsPerMinute(activityType);
+    return (minutes * stepsPerMinute).round();
+  }
+
+  // Calculate heart rate based on activity intensity
+  int _calculateHeartRate(FitnessActivityType activityType, Duration duration) {
+    final baseHeartRate = 70;
+    final intensityMultiplier = _getIntensityMultiplier(activityType);
+    final timeMultiplier = (duration.inMinutes / 30.0).clamp(0.0, 2.0);
+    
+    return (baseHeartRate + (intensityMultiplier * timeMultiplier)).round();
+  }
+
+  // Get calories burned per minute for activity type
+  double _getCaloriesPerMinute(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.steps:
+        return 2.0;
+      case FitnessActivityType.walking:
+        return 4.0;
+      case FitnessActivityType.running:
+        return 10.0;
+      case FitnessActivityType.cycling:
+        return 8.0;
+      case FitnessActivityType.swimming:
+        return 9.0;
+      case FitnessActivityType.weightlifting:
+        return 6.0;
+      case FitnessActivityType.yoga:
+        return 3.0;
+      case FitnessActivityType.hiking:
+        return 7.0;
+      case FitnessActivityType.dancing:
+        return 5.0;
+      case FitnessActivityType.tennis:
+        return 8.5;
+      case FitnessActivityType.basketball:
+        return 9.5;
+    }
+  }
+
+  // Get speed in km/h for activity type
+  double _getSpeedKmh(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.steps:
+        return 0.0;
+      case FitnessActivityType.walking:
+        return 5.0;
+      case FitnessActivityType.running:
+        return 10.0;
+      case FitnessActivityType.cycling:
+        return 20.0;
+      case FitnessActivityType.swimming:
+        return 2.0;
+      case FitnessActivityType.weightlifting:
+        return 0.0;
+      case FitnessActivityType.yoga:
+        return 0.0;
+      case FitnessActivityType.hiking:
+        return 4.0;
+      case FitnessActivityType.dancing:
+        return 0.0;
+      case FitnessActivityType.tennis:
+        return 0.0;
+      case FitnessActivityType.basketball:
+        return 0.0;
+    }
+  }
+
+  // Get steps per minute for activity type
+  double _getStepsPerMinute(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.steps:
+        return 100.0;
+      case FitnessActivityType.walking:
+        return 100.0;
+      case FitnessActivityType.running:
+        return 150.0;
+      case FitnessActivityType.cycling:
+        return 0.0;
+      case FitnessActivityType.swimming:
+        return 0.0;
+      case FitnessActivityType.weightlifting:
+        return 20.0;
+      case FitnessActivityType.yoga:
+        return 10.0;
+      case FitnessActivityType.hiking:
+        return 80.0;
+      case FitnessActivityType.dancing:
+        return 120.0;
+      case FitnessActivityType.tennis:
+        return 80.0;
+      case FitnessActivityType.basketball:
+        return 100.0;
+    }
+  }
+
+  // Get intensity multiplier for heart rate calculation
+  double _getIntensityMultiplier(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.steps:
+        return 15.0;
+      case FitnessActivityType.walking:
+        return 20.0;
+      case FitnessActivityType.running:
+        return 50.0;
+      case FitnessActivityType.cycling:
+        return 40.0;
+      case FitnessActivityType.swimming:
+        return 35.0;
+      case FitnessActivityType.weightlifting:
+        return 30.0;
+      case FitnessActivityType.yoga:
+        return 10.0;
+      case FitnessActivityType.hiking:
+        return 25.0;
+      case FitnessActivityType.dancing:
+        return 35.0;
+      case FitnessActivityType.tennis:
+        return 45.0;
+      case FitnessActivityType.basketball:
+        return 50.0;
+    }
+  }
+
+  // Apply workout rewards to character stats
+  void _applyWorkoutRewards(WorkoutSession session) {
+    final characterProvider = _getCharacterProvider();
+    if (characterProvider == null) return;
+
+    final character = characterProvider.currentCharacter;
+    if (character == null) return;
+
+    // Calculate stat boosts based on workout
+    final statBoosts = _calculateStatBoosts(session);
+    
+    // Apply the boosts by adding experience (simulating stat boosts)
+    final experienceGained = _calculateWorkoutExperience(session);
+    characterProvider.addExperience(experienceGained, source: 'Workout: ${session.activityType.name}');
+    
+    // Check for achievements
+    _checkWorkoutAchievements(session);
+    
+    if (kDebugMode) {
+      print('[FitnessTrackerService] Applied workout rewards: $statBoosts');
+    }
+  }
+
+  // Calculate stat boosts based on workout session
+  Map<String, int> _calculateStatBoosts(WorkoutSession session) {
+    final boosts = <String, int>{};
+    
+    switch (session.activityType) {
+      case FitnessActivityType.steps:
+        boosts['vitality'] = (session.duration.inMinutes / 15).round();
+        boosts['energy'] = (session.duration.inMinutes / 20).round();
+        break;
+      case FitnessActivityType.walking:
+      case FitnessActivityType.running:
+      case FitnessActivityType.hiking:
+        boosts['strength'] = (session.duration.inMinutes / 10).round();
+        boosts['vitality'] = (session.duration.inMinutes / 8).round();
+        break;
+      case FitnessActivityType.cycling:
+        boosts['dexterity'] = (session.duration.inMinutes / 10).round();
+        boosts['vitality'] = (session.duration.inMinutes / 12).round();
+        break;
+      case FitnessActivityType.swimming:
+        boosts['strength'] = (session.duration.inMinutes / 12).round();
+        boosts['dexterity'] = (session.duration.inMinutes / 15).round();
+        boosts['vitality'] = (session.duration.inMinutes / 10).round();
+        break;
+      case FitnessActivityType.weightlifting:
+        boosts['strength'] = (session.duration.inMinutes / 5).round();
+        boosts['vitality'] = (session.duration.inMinutes / 8).round();
+        break;
+      case FitnessActivityType.yoga:
+        boosts['energy'] = (session.duration.inMinutes / 10).round();
+        boosts['dexterity'] = (session.duration.inMinutes / 15).round();
+        break;
+      case FitnessActivityType.dancing:
+        boosts['dexterity'] = (session.duration.inMinutes / 8).round();
+        boosts['energy'] = (session.duration.inMinutes / 12).round();
+        break;
+      case FitnessActivityType.tennis:
+      case FitnessActivityType.basketball:
+        boosts['strength'] = (session.duration.inMinutes / 12).round();
+        boosts['dexterity'] = (session.duration.inMinutes / 10).round();
+        boosts['vitality'] = (session.duration.inMinutes / 15).round();
+        break;
+    }
+    
+    return boosts;
+  }
+
+  // Calculate experience gained from workout
+  int _calculateWorkoutExperience(WorkoutSession session) {
+    final baseExperience = session.duration.inMinutes * 2;
+    final intensityBonus = _getIntensityMultiplier(session.activityType) / 10;
+    return (baseExperience * (1 + intensityBonus)).round();
+  }
+
+  // Check for workout-related achievements
+  void _checkWorkoutAchievements(WorkoutSession session) {
+    final achievementService = _getAchievementService();
+    if (achievementService == null) return;
+
+    // Check for workout duration achievements
+    if (session.duration.inMinutes >= 30) {
+      // achievementService.unlockAchievement('workout_30_min');
+      if (kDebugMode) {
+        print('[FitnessTrackerService] Achievement unlocked: workout_30_min');
+      }
+    }
+    if (session.duration.inMinutes >= 60) {
+      // achievementService.unlockAchievement('workout_1_hour');
+      if (kDebugMode) {
+        print('[FitnessTrackerService] Achievement unlocked: workout_1_hour');
+      }
+    }
+    if (session.duration.inMinutes >= 120) {
+      // achievementService.unlockAchievement('workout_2_hours');
+      if (kDebugMode) {
+        print('[FitnessTrackerService] Achievement unlocked: workout_2_hours');
+      }
+    }
+
+    // Check for activity-specific achievements
+    switch (session.activityType) {
+      case FitnessActivityType.running:
+        if (session.distance >= 5.0) {
+          // achievementService.unlockAchievement('run_5km');
+          if (kDebugMode) {
+            print('[FitnessTrackerService] Achievement unlocked: run_5km');
+          }
+        }
+        if (session.distance >= 10.0) {
+          // achievementService.unlockAchievement('run_10km');
+          if (kDebugMode) {
+            print('[FitnessTrackerService] Achievement unlocked: run_10km');
+          }
+        }
+        break;
+      case FitnessActivityType.cycling:
+        if (session.distance >= 20.0) {
+          // achievementService.unlockAchievement('cycle_20km');
+          if (kDebugMode) {
+            print('[FitnessTrackerService] Achievement unlocked: cycle_20km');
+          }
+        }
+        break;
+      case FitnessActivityType.swimming:
+        if (session.duration.inMinutes >= 30) {
+          // achievementService.unlockAchievement('swim_30_min');
+          if (kDebugMode) {
+            print('[FitnessTrackerService] Achievement unlocked: swim_30_min');
+          }
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  // Get character provider from context
+  CharacterProvider? _getCharacterProvider() {
+    // This would need to be implemented with proper context access
+    // For now, we'll return null and handle it gracefully
+    return null;
+  }
+
+  // Get achievement service from context
+  AchievementService? _getAchievementService() {
+    // This would need to be implemented with proper context access
+    // For now, we'll return null and handle it gracefully
+    return null;
+  }
+
+  // Calculate totals
+  void _calculateTotals() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    
-    try {
-      // Get today's health data
-      final healthData = await _health.getHealthDataFromTypes(
-        types: [
-          HealthDataType.STEPS,
-          HealthDataType.ACTIVE_ENERGY_BURNED,
-          HealthDataType.WORKOUT,
-        ],
-        startTime: today,
-        endTime: now,
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+    final monthStart = DateTime(now.year, now.month, 1);
+
+    _dailyTotals.clear();
+    _weeklyTotals.clear();
+    _monthlyTotals.clear();
+
+    for (final activity in _activities) {
+      final activityDate = DateTime(
+        activity.timestamp.year,
+        activity.timestamp.month,
+        activity.timestamp.day,
       );
 
-      int totalSteps = 0;
-      double totalCalories = 0;
-      int workoutMinutes = 0;
-
-      for (var point in healthData) {
-        if (point.value is NumericHealthValue) {
-          final value = (point.value as NumericHealthValue).numericValue;
-          
-          switch (point.type) {
-            case HealthDataType.STEPS:
-              totalSteps += value.toInt();
-              break;
-            case HealthDataType.ACTIVE_ENERGY_BURNED:
-              totalCalories += value.toDouble();
-              break;
-            case HealthDataType.WORKOUT:
-              workoutMinutes += 30; // Assume 30 min workout
-              break;
-            default:
-              break;
-          }
-        }
+      // Daily totals
+      if (activityDate.isAtSameMomentAs(today)) {
+        _dailyTotals[activity.type] = (_dailyTotals[activity.type] ?? 0) + activity.value;
       }
 
-      // Step milestones
-      if (totalSteps >= 10000) {
-        boosts.add(StatBoost(
-          name: 'Daily Walker',
-          description: '10,000+ steps today',
-          statType: 'vitality',
-          bonusValue: 15,
-          sourceActivity: ActivityType.walking,
-          expiresAt: DateTime.now().add(const Duration(hours: 24)),
-        ));
-      } else if (totalSteps >= 5000) {
-        boosts.add(StatBoost(
-          name: 'Active Day',
-          description: '5,000+ steps today',
-          statType: 'vitality',
-          bonusValue: 8,
-          sourceActivity: ActivityType.walking,
-          expiresAt: DateTime.now().add(const Duration(hours: 24)),
-        ));
+      // Weekly totals
+      if (activityDate.isAfter(weekStart.subtract(const Duration(days: 1)))) {
+        _weeklyTotals[activity.type] = (_weeklyTotals[activity.type] ?? 0) + activity.value;
       }
 
-      // Calorie burn milestones
-      if (totalCalories >= 500) {
-        boosts.add(StatBoost(
-          name: 'Calorie Crusher',
-          description: '500+ calories burned today',
-          statType: 'strength',
-          bonusValue: 12,
-          sourceActivity: ActivityType.cardio,
-          expiresAt: DateTime.now().add(const Duration(hours: 24)),
-        ));
+      // Monthly totals
+      if (activityDate.isAfter(monthStart.subtract(const Duration(days: 1)))) {
+        _monthlyTotals[activity.type] = (_monthlyTotals[activity.type] ?? 0) + activity.value;
       }
-
-      // Workout completion
-      if (workoutMinutes >= 30) {
-        boosts.add(StatBoost(
-          name: 'Dedicated Athlete',
-          description: 'Completed workout today',
-          statType: 'all',
-          bonusValue: 10,
-          sourceActivity: ActivityType.other,
-          expiresAt: DateTime.now().add(const Duration(hours: 24)),
-        ));
-      }
-
-    } catch (e) {
-      print('Error getting daily activity boosts: $e');
     }
-
-    return boosts;
   }
 
-  // Get weekly activity boosts
-  Future<List<StatBoost>> _getWeeklyActivityBoosts() async {
-    final boosts = <StatBoost>[];
+  // Award XP based on fitness activity
+  Future<void> _awardFitnessXP(FitnessActivity activity) async {
+    if (_characterProgression == null) return;
+
+    int xpAmount = 0;
+    String source = '';
+
+    switch (activity.type) {
+      case FitnessActivityType.steps:
+        xpAmount = (activity.value / 1000).round(); // 1 XP per 1000 steps
+        source = 'Steps';
+        break;
+      case FitnessActivityType.walking:
+        xpAmount = (activity.value * 2).round(); // 2 XP per minute
+        source = 'Walking';
+        break;
+      case FitnessActivityType.running:
+        xpAmount = (activity.value * 5).round(); // 5 XP per minute
+        source = 'Running';
+        break;
+      case FitnessActivityType.cycling:
+        xpAmount = (activity.value * 3).round(); // 3 XP per minute
+        source = 'Cycling';
+        break;
+      case FitnessActivityType.swimming:
+        xpAmount = (activity.value * 8).round(); // 8 XP per minute
+        source = 'Swimming';
+        break;
+      case FitnessActivityType.yoga:
+        xpAmount = (activity.value * 2).round(); // 2 XP per minute
+        source = 'Yoga';
+        break;
+      case FitnessActivityType.weightlifting:
+        xpAmount = (activity.value * 3).round(); // 3 XP per minute
+        source = 'Weightlifting';
+        break;
+      case FitnessActivityType.hiking:
+        xpAmount = (activity.value * 4).round(); // 4 XP per minute
+        source = 'Hiking';
+        break;
+      case FitnessActivityType.dancing:
+        xpAmount = (activity.value * 3).round(); // 3 XP per minute
+        source = 'Dancing';
+        break;
+      case FitnessActivityType.tennis:
+        xpAmount = (activity.value * 4).round(); // 4 XP per minute
+        source = 'Tennis';
+        break;
+      case FitnessActivityType.basketball:
+        xpAmount = (activity.value * 5).round(); // 5 XP per minute
+        source = 'Basketball';
+        break;
+    }
+
+    if (xpAmount > 0) {
+      _characterProgression!.addExperience(xpAmount, source: source);
+    }
+  }
+
+  // Get fitness statistics
+  Map<String, dynamic> getFitnessStatistics() {
     final now = DateTime.now();
-    final weekStart = now.subtract(Duration(days: now.weekday - 1));
-    
-    try {
-      // Get week's health data
-      final healthData = await _health.getHealthDataFromTypes(
-        types: [
-          HealthDataType.WORKOUT,
-          HealthDataType.ACTIVE_ENERGY_BURNED,
-        ],
-        startTime: weekStart,
-        endTime: now,
-      );
+    final today = DateTime(now.year, now.month, now.day);
+    final weekStart = today.subtract(Duration(days: today.weekday - 1));
+    final monthStart = DateTime(now.year, now.month, 1);
 
-      int workoutDays = 0;
-      double weeklyCalories = 0;
+    final todayActivities = _activities.where(
+      (activity) => activity.timestamp.isAfter(today.subtract(const Duration(days: 1))),
+    ).toList();
 
-      for (var point in healthData) {
-        if (point.value is NumericHealthValue) {
-          final value = (point.value as NumericHealthValue).numericValue;
-          
-          switch (point.type) {
-            case HealthDataType.WORKOUT:
-              workoutDays++;
-              break;
-            case HealthDataType.ACTIVE_ENERGY_BURNED:
-              weeklyCalories += value.toDouble();
-              break;
-            default:
-              break;
-          }
-        }
-      }
+    final weekActivities = _activities.where(
+      (activity) => activity.timestamp.isAfter(weekStart.subtract(const Duration(days: 1))),
+    ).toList();
 
-      // Weekly workout consistency
-      if (workoutDays >= 5) {
-        boosts.add(StatBoost(
-          name: 'Fitness Champion',
-          description: '5+ workout days this week',
-          statType: 'all',
-          bonusValue: 20,
-          sourceActivity: ActivityType.other,
-          expiresAt: DateTime.now().add(const Duration(days: 7)),
-        ));
-      } else if (workoutDays >= 3) {
-        boosts.add(StatBoost(
-          name: 'Consistent Athlete',
-          description: '3+ workout days this week',
-          statType: 'vitality',
-          bonusValue: 15,
-          sourceActivity: ActivityType.other,
-          expiresAt: DateTime.now().add(const Duration(days: 7)),
-        ));
-      }
+    final monthActivities = _activities.where(
+      (activity) => activity.timestamp.isAfter(monthStart.subtract(const Duration(days: 1))),
+    ).toList();
 
-      // Weekly calorie burn
-      if (weeklyCalories >= 2000) {
-        boosts.add(StatBoost(
-          name: 'Calorie Dominator',
-          description: '2000+ calories burned this week',
-          statType: 'strength',
-          bonusValue: 18,
-          sourceActivity: ActivityType.cardio,
-          expiresAt: DateTime.now().add(const Duration(days: 7)),
-        ));
-      }
-
-    } catch (e) {
-      print('Error getting weekly activity boosts: $e');
-    }
-
-    return boosts;
-  }
-
-  // Apply boosts to character
-  GameCharacter applyFitnessBoosts(GameCharacter character) {
-    final allBoosts = [
-      ..._currentBoosts.realTimeBoosts,
-      ..._currentBoosts.dailyBoosts,
-      ..._currentBoosts.weeklyBoosts,
-    ].where((boost) => !boost.isExpired).toList();
-
-    int strengthBonus = 0;
-    int dexterityBonus = 0;
-    int vitalityBonus = 0;
-    int intelligenceBonus = 0;
-
-    for (var boost in allBoosts) {
-      switch (boost.statType) {
-        case 'strength':
-          strengthBonus += boost.bonusValue;
-          break;
-        case 'dexterity':
-          dexterityBonus += boost.bonusValue;
-          break;
-        case 'vitality':
-          vitalityBonus += boost.bonusValue;
-          break;
-        case 'intelligence':
-          intelligenceBonus += boost.bonusValue;
-          break;
-        case 'all':
-          strengthBonus += boost.bonusValue;
-          dexterityBonus += boost.bonusValue;
-          vitalityBonus += boost.bonusValue;
-          intelligenceBonus += boost.bonusValue;
-          break;
-      }
-    }
-
-    return character.copyWith(
-      allocatedStrength: character.allocatedStrength + strengthBonus,
-      allocatedDexterity: character.allocatedDexterity + dexterityBonus,
-      allocatedVitality: character.allocatedVitality + vitalityBonus,
-      allocatedEnergy: character.allocatedEnergy + intelligenceBonus,
-    );
-  }
-
-  // Get fitness tracker status for UI
-  Map<String, dynamic> getFitnessTrackerStatus() {
     return {
-      'connected_trackers': _connectedTrackers.map((t) => t.toString()).toList(),
-      'latest_heart_rate': _latestMetrics?.heartRate,
-      'heart_rate_zone': _latestMetrics?.heartRateZone?.toString(),
-      'is_working_out': _latestMetrics?.isWorkingOut ?? false,
-      'energy_level': _latestMetrics?.energyLevel ?? 0.7,
-      'stress_level': _latestMetrics?.stressLevel ?? 0.5,
-      'active_boosts': _currentBoosts.realTimeBoosts.length + 
-                      _currentBoosts.dailyBoosts.length + 
-                      _currentBoosts.weeklyBoosts.length,
-      'multipliers': _currentBoosts.multipliers,
+      'totalActivities': _activities.length,
+      'todayActivities': todayActivities.length,
+      'weekActivities': weekActivities.length,
+      'monthActivities': monthActivities.length,
+      'dailyTotals': _dailyTotals,
+      'weeklyTotals': _weeklyTotals,
+      'monthlyTotals': _monthlyTotals,
+      'currentStreak': _calculateStreak(),
+      'longestStreak': _calculateLongestStreak(),
+      'favoriteActivity': _getFavoriteActivity(),
+      'totalXP': _calculateTotalXP(),
     };
   }
 
-  // Connect to specific fitness tracker
-  Future<bool> connectTracker(FitnessTracker tracker) async {
-    try {
-      switch (tracker) {
-        case FitnessTracker.fitbit:
-          final connected = await _connectFitbit();
-          if (connected) _connectedTrackers.add(tracker);
-          return connected;
-        case FitnessTracker.garmin:
-          final connected = await _connectGarmin();
-          if (connected) _connectedTrackers.add(tracker);
-          return connected;
-        default:
-          return false;
+  // Calculate current streak
+  int _calculateStreak() {
+    if (_activities.isEmpty) return 0;
+
+    final now = DateTime.now();
+    int streak = 0;
+    DateTime currentDate = DateTime(now.year, now.month, now.day);
+
+    while (true) {
+      final hasActivity = _activities.any((activity) {
+        final activityDate = DateTime(
+          activity.timestamp.year,
+          activity.timestamp.month,
+          activity.timestamp.day,
+        );
+        return activityDate.isAtSameMomentAs(currentDate);
+      });
+
+      if (hasActivity) {
+        streak++;
+        currentDate = currentDate.subtract(const Duration(days: 1));
+      } else {
+        break;
       }
-    } catch (e) {
-      print('Error connecting to $tracker: $e');
-      return false;
     }
+
+    return streak;
   }
 
-  // Connect to Fitbit
-  Future<bool> _connectFitbit() async {
-    try {
-      final result = await _fitbitChannel.invokeMethod('connect', {
-        'client_id': 'YOUR_FITBIT_CLIENT_ID',
-        'scopes': ['activity', 'heartrate', 'profile'],
-      });
-      return result == true;
-    } catch (e) {
-      print('Fitbit connection error: $e');
-      return false;
-    }
-  }
+  // Calculate longest streak
+  int _calculateLongestStreak() {
+    if (_activities.isEmpty) return 0;
 
-  // Connect to Garmin
-  Future<bool> _connectGarmin() async {
-    try {
-      final result = await _garminChannel.invokeMethod('connect', {
-        'consumer_key': 'YOUR_GARMIN_CONSUMER_KEY',
-        'consumer_secret': 'YOUR_GARMIN_CONSUMER_SECRET',
-      });
-      return result == true;
-    } catch (e) {
-      print('Garmin connection error: $e');
-      return false;
-    }
-  }
+    int longestStreak = 0;
+    int currentStreak = 0;
+    DateTime? lastDate;
 
-  // Save fitness tracker preferences
-  Future<void> savePreferences() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setStringList(
-        'connected_fitness_trackers',
-        _connectedTrackers.map((t) => t.toString()).toList(),
+    final sortedActivities = List<FitnessActivity>.from(_activities)
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    for (final activity in sortedActivities) {
+      final activityDate = DateTime(
+        activity.timestamp.year,
+        activity.timestamp.month,
+        activity.timestamp.day,
       );
-      await prefs.setInt('max_heart_rate', _maxHeartRate);
-    } catch (e) {
-      print('Error saving fitness tracker preferences: $e');
+
+      if (lastDate == null) {
+        currentStreak = 1;
+      } else {
+        final daysDifference = activityDate.difference(lastDate).inDays;
+        if (daysDifference == 1) {
+          currentStreak++;
+        } else {
+          longestStreak = longestStreak > currentStreak ? longestStreak : currentStreak;
+          currentStreak = 1;
+        }
+      }
+
+      lastDate = activityDate;
+    }
+
+    return longestStreak > currentStreak ? longestStreak : currentStreak;
+  }
+
+  // Get favorite activity type
+  FitnessActivityType? _getFavoriteActivity() {
+    if (_activities.isEmpty) return null;
+
+    final activityCounts = <FitnessActivityType, int>{};
+    for (final activity in _activities) {
+      activityCounts[activity.type] = (activityCounts[activity.type] ?? 0) + 1;
+    }
+
+    FitnessActivityType? favorite;
+    int maxCount = 0;
+
+    for (final entry in activityCounts.entries) {
+      if (entry.value > maxCount) {
+        maxCount = entry.value;
+        favorite = entry.key;
+      }
+    }
+
+    return favorite;
+  }
+
+  // Calculate total XP earned from fitness
+  int _calculateTotalXP() {
+    int totalXP = 0;
+    for (final activity in _activities) {
+      // Use the same XP calculation logic as _awardFitnessXP
+      switch (activity.type) {
+        case FitnessActivityType.steps:
+          totalXP += (activity.value / 1000).round();
+          break;
+        case FitnessActivityType.walking:
+          totalXP += (activity.value * 2).round();
+          break;
+        case FitnessActivityType.running:
+          totalXP += (activity.value * 5).round();
+          break;
+        case FitnessActivityType.cycling:
+          totalXP += (activity.value * 3).round();
+          break;
+        case FitnessActivityType.swimming:
+          totalXP += (activity.value * 8).round();
+          break;
+        case FitnessActivityType.yoga:
+          totalXP += (activity.value * 2).round();
+          break;
+        case FitnessActivityType.weightlifting:
+          totalXP += (activity.value * 3).round();
+          break;
+        case FitnessActivityType.hiking:
+          totalXP += (activity.value * 4).round();
+          break;
+        case FitnessActivityType.dancing:
+          totalXP += (activity.value * 3).round();
+          break;
+        case FitnessActivityType.tennis:
+          totalXP += (activity.value * 4).round();
+          break;
+        case FitnessActivityType.basketball:
+          totalXP += (activity.value * 5).round();
+          break;
+      }
+    }
+    return totalXP;
+  }
+
+  // Get activities by date range
+  List<FitnessActivity> getActivitiesByDateRange(DateTime start, DateTime end) {
+    return _activities.where((activity) {
+      return activity.timestamp.isAfter(start.subtract(const Duration(days: 1))) &&
+             activity.timestamp.isBefore(end.add(const Duration(days: 1)));
+    }).toList();
+  }
+
+  // Get activities by type
+  List<FitnessActivity> getActivitiesByType(FitnessActivityType type) {
+    return _activities.where((activity) => activity.type == type).toList();
+  }
+
+  // Clear all activities
+  Future<void> clearActivities() async {
+    _activities.clear();
+    _calculateTotals();
+    await _saveFitnessData();
+    notifyListeners();
+  }
+
+  // Export fitness data
+  Map<String, dynamic> exportFitnessData() {
+    return {
+      'trackerType': _currentTracker.name,
+      'isTracking': _isTracking,
+      'activities': _activities.map((activity) => activity.toJson()).toList(),
+      'statistics': getFitnessStatistics(),
+    };
+  }
+
+  // Import fitness data
+  Future<void> importFitnessData(Map<String, dynamic> data) async {
+    if (data.containsKey('trackerType')) {
+      _currentTracker = FitnessTrackerType.values.firstWhere(
+        (e) => e.name == data['trackerType'],
+      );
+    }
+
+    if (data.containsKey('isTracking')) {
+      _isTracking = data['isTracking'];
+    }
+
+    if (data.containsKey('activities')) {
+      final activitiesList = data['activities'] as List;
+      _activities = activitiesList
+          .map((json) => FitnessActivity.fromJson(Map<String, dynamic>.from(json as Map)))
+          .toList();
+    }
+
+    _calculateTotals();
+    await _saveFitnessData();
+    notifyListeners();
+  }
+
+  String _getActivityIcon(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.walking:
+        return '🚶';
+      case FitnessActivityType.running:
+        return '🏃';
+      case FitnessActivityType.cycling:
+        return '🚴';
+      case FitnessActivityType.swimming:
+        return '🏊';
+      case FitnessActivityType.yoga:
+        return '🧘';
+      case FitnessActivityType.steps:
+        return '👣';
+      case FitnessActivityType.weightlifting:
+        return '🏋️';
+      case FitnessActivityType.hiking:
+        return '🏔️';
+      case FitnessActivityType.dancing:
+        return '💃';
+      case FitnessActivityType.tennis:
+        return '🎾';
+      case FitnessActivityType.basketball:
+        return '🏀';
     }
   }
 
-  // Load fitness tracker preferences
-  Future<void> loadPreferences() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final trackerStrings = prefs.getStringList('connected_fitness_trackers') ?? [];
-      _connectedTrackers = trackerStrings
-          .map((s) => FitnessTracker.values.firstWhere(
-                (t) => t.toString() == s,
-                orElse: () => FitnessTracker.generic,
-              ))
-          .toSet();
-      _maxHeartRate = prefs.getInt('max_heart_rate') ?? 190;
-    } catch (e) {
-      print('Error loading fitness tracker preferences: $e');
+  String _getActivityName(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.walking:
+        return 'Walking';
+      case FitnessActivityType.running:
+        return 'Running';
+      case FitnessActivityType.cycling:
+        return 'Cycling';
+      case FitnessActivityType.swimming:
+        return 'Swimming';
+      case FitnessActivityType.yoga:
+        return 'Yoga';
+      case FitnessActivityType.steps:
+        return 'Steps';
+      case FitnessActivityType.weightlifting:
+        return 'Weightlifting';
+      case FitnessActivityType.hiking:
+        return 'Hiking';
+      case FitnessActivityType.dancing:
+        return 'Dancing';
+      case FitnessActivityType.tennis:
+        return 'Tennis';
+      case FitnessActivityType.basketball:
+        return 'Basketball';
     }
-  }
-
-  // Dispose resources
-  void dispose() {
-    _realTimeTimer?.cancel();
-    _metricsController.close();
-    _boostsController.close();
   }
 } 

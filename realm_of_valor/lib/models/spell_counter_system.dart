@@ -79,6 +79,11 @@ class CounterSpellAttempt {
 
 class SpellCounterSystem {
   final Map<String, List<CounterStack>> _counterStacks = {};
+  final Map<String, PendingSpell> _pendingSpells = {};
+  final List<CounterSpellAttempt> _counterAttempts = [];
+  
+  // Callback for when a spell is resolved
+  Function(PendingSpell, List<CounterSpellAttempt>, double, List<String>)? onSpellResolved;
   
   /// Add a counter spell to the stack for a specific player
   void addCounterSpell(String playerId, ActionCard counterCard, String targetSpellId) {
@@ -90,6 +95,26 @@ class SpellCounterSystem {
     ));
   }
   
+  /// Get the current pending spell
+  PendingSpell? get currentPendingSpell {
+    if (_pendingSpells.isEmpty) return null;
+    return _pendingSpells.values.first;
+  }
+  
+  /// Check if there's an active interrupt window
+  bool get hasActiveInterrupt {
+    return _pendingSpells.isNotEmpty;
+  }
+  
+  /// Force resolve the current spell
+  void forceResolve() {
+    if (_pendingSpells.isNotEmpty) {
+      final spell = _pendingSpells.values.first;
+      _pendingSpells.clear();
+      onSpellResolved?.call(spell, _counterAttempts, 1.0, ['Force resolved']);
+    }
+  }
+  
   /// Check if a spell can be countered and return the counter card if available
   ActionCard? checkForCounter(String targetPlayerId, String spellId) {
     final counters = _counterStacks[targetPlayerId];
@@ -99,7 +124,12 @@ class SpellCounterSystem {
     final matchingCounter = counters.lastWhere(
       (counter) => counter.targetSpellId == spellId,
       orElse: () => CounterStack(
-        counterCard: ActionCard.skip(), 
+        counterCard: ActionCard(
+          name: 'Skip',
+          description: 'Skip action',
+          type: ActionCardType.skip,
+          effect: 'skip',
+        ), 
         targetSpellId: '', 
         timestamp: DateTime.now()
       ),
@@ -138,6 +168,47 @@ class SpellCounterSystem {
   int getCounterCount(String playerId) {
     return _counterStacks[playerId]?.length ?? 0;
   }
+  
+  /// Start an interrupt window for a spell
+  void startInterruptWindow(ActionCard spell, String casterId, String targetId) {
+    final pendingSpell = PendingSpell(
+      spell: spell,
+      casterId: casterId,
+      targetId: targetId,
+      castTime: DateTime.now(),
+    );
+    _pendingSpells[spell.id] = pendingSpell;
+  }
+  
+  /// Attempt to counter a spell
+  bool attemptCounter(ActionCard counterSpell, String counterId) {
+    // Find the most recent pending spell
+    if (_pendingSpells.isEmpty) return false;
+    
+    final latestSpell = _pendingSpells.values.last;
+    if (latestSpell.isExpired) {
+      _pendingSpells.remove(latestSpell.spell.id);
+      return false;
+    }
+    
+    final attempt = CounterSpellAttempt(
+      counterSpell: counterSpell,
+      counterId: counterId,
+      targetSpellId: latestSpell.spell.id,
+      attemptTime: DateTime.now(),
+      counterType: CounterType.dispel, // Default to dispel
+    );
+    
+    _counterAttempts.add(attempt);
+    
+    // Resolve the spell with counter result
+    if (onSpellResolved != null) {
+      onSpellResolved!(latestSpell, [attempt], 1.0, ['Spell countered!']);
+    }
+    
+    _pendingSpells.remove(latestSpell.spell.id);
+    return true;
+  }
 }
 
 class CounterStack {
@@ -164,6 +235,7 @@ extension CounterSpells on ActionCard {
       name: name,
       description: description,
       type: ActionCardType.counter,
+      effect: 'counter',
       cost: cost,
       physicalRequirement: '',
     );
@@ -179,6 +251,7 @@ extension CounterSpells on ActionCard {
       name: name,
       description: description,
       type: ActionCardType.counter,
+      effect: 'reflect',
       cost: cost,
       physicalRequirement: '',
     );
@@ -194,6 +267,7 @@ extension CounterSpells on ActionCard {
       name: name,
       description: description,
       type: ActionCardType.counter,
+      effect: 'absorb',
       cost: cost,
       physicalRequirement: '',
     );

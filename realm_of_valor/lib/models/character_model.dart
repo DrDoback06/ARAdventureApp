@@ -188,6 +188,7 @@ class GameCharacter {
   final List<Skill> skills;
   final List<CardInstance> skillSlots;
   
+  final int gold;
   final DateTime createdAt;
   final DateTime lastPlayed;
   final Map<String, dynamic> characterData;
@@ -214,6 +215,7 @@ class GameCharacter {
     List<CardInstance>? stash,
     List<Skill>? skills,
     List<CardInstance>? skillSlots,
+    int? gold,
     DateTime? createdAt,
     DateTime? lastPlayed,
     Map<String, dynamic>? characterData,
@@ -224,6 +226,7 @@ class GameCharacter {
         stash = stash ?? <CardInstance>[],
         skills = skills ?? <Skill>[],
         skillSlots = skillSlots ?? <CardInstance>[],
+        gold = gold ?? 0,
         createdAt = createdAt ?? DateTime.now(),
         lastPlayed = lastPlayed ?? DateTime.now(),
         characterData = characterData ?? <String, dynamic>{};
@@ -293,24 +296,10 @@ class GameCharacter {
     return total;
   }
 
-  int get maxHealth {
-    int base = 50 + (level * 10);
-    int vitalityBonus = totalVitality * 2;
-    int equipmentBonus = 0;
-    
-    for (var item in equipment.getAllEquippedItems()) {
-      for (var modifier in item.card.statModifiers) {
-        if (modifier.statName.toLowerCase() == 'health' || 
-            modifier.statName.toLowerCase() == 'life') {
-          equipmentBonus += modifier.isPercentage 
-              ? ((base + vitalityBonus) * modifier.value / 100).round()
-              : modifier.value;
-        }
-      }
-    }
-    
-    return base + vitalityBonus + equipmentBonus;
-  }
+  // Battle system properties
+  int get maxHealth => (totalVitality * 10) + 100;
+  int get attack => totalStrength * 2;
+  List<CardInstance> get equippedItems => equipment.getAllEquippedItems();
 
   int get maxMana {
     int base = 30 + (level * 5);
@@ -390,6 +379,7 @@ class GameCharacter {
     List<CardInstance>? stash,
     List<Skill>? skills,
     List<CardInstance>? skillSlots,
+    int? gold,
     DateTime? createdAt,
     DateTime? lastPlayed,
     Map<String, dynamic>? characterData,
@@ -416,6 +406,7 @@ class GameCharacter {
       stash: stash ?? this.stash,
       skills: skills ?? this.skills,
       skillSlots: skillSlots ?? this.skillSlots,
+      gold: gold ?? this.gold,
       createdAt: createdAt ?? this.createdAt,
       lastPlayed: lastPlayed ?? this.lastPlayed,
       characterData: characterData ?? this.characterData,

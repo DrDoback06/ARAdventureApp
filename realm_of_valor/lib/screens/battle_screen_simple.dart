@@ -391,6 +391,7 @@ class _BattleScreenSimpleState extends State<BattleScreenSimple> {
                                 
                                 return Container(
                                   width: 80,
+                                  height: 60,
                                   margin: const EdgeInsets.only(right: 8),
                                   child: GestureDetector(
                                     onTap: () => battleController.selectCard(card),
@@ -410,31 +411,34 @@ class _BattleScreenSimpleState extends State<BattleScreenSimple> {
                                       padding: const EdgeInsets.all(4),
                                       child: Column(
                                         mainAxisAlignment: MainAxisAlignment.center,
+                                        mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          Text(
-                                            card.name,
-                                            style: TextStyle(
-                                              color: canPlay ? Colors.white : Colors.grey,
-                                              fontSize: 10,
-                                              fontWeight: FontWeight.bold,
+                                          Flexible(
+                                            child: Text(
+                                              card.name,
+                                              style: TextStyle(
+                                                color: canPlay ? Colors.white : Colors.grey,
+                                                fontSize: 9,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                              textAlign: TextAlign.center,
+                                              maxLines: 2,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                            textAlign: TextAlign.center,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          const SizedBox(height: 4),
+                                          const SizedBox(height: 2),
                                           Text(
                                             'Cost: ${card.cost}',
                                             style: TextStyle(
                                               color: canPlay ? Colors.blue : Colors.grey,
-                                              fontSize: 8,
+                                              fontSize: 7,
                                             ),
                                           ),
                                           Text(
                                             card.type.name.toUpperCase(),
                                             style: TextStyle(
                                               color: canPlay ? Colors.orange : Colors.grey,
-                                              fontSize: 8,
+                                              fontSize: 7,
                                             ),
                                           ),
                                         ],

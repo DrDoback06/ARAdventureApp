@@ -1,48 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:math' as math;
 import 'dart:async';
-
-enum ParticleType {
-  // Elemental Effects
-  fire,
-  ice,
-  lightning,
-  earth,
-  water,
-  air,
-  light,
-  shadow,
-  nature,
-  arcane,
-  
-  // Status Effects
-  burn,
-  freeze,
-  shock,
-  poison,
-  heal,
-  shield,
-  curse,
-  blessing,
-  
-  // Buff/Debuff Effects
-  strengthBoost,
-  weakening,
-  speedBoost,
-  slowness,
-  magicBoost,
-  silence,
-  
-  // Special Effects
-  explosion,
-  sparkle,
-  smoke,
-  stars,
-  energy,
-  absorption,
-  reflection,
-  dispel,
-}
+import '../models/unified_particle_system.dart';
 
 class Particle {
   Offset position;
@@ -166,7 +125,7 @@ class _ParticleSystemState extends State<ParticleSystem>
       case ParticleType.explosion:
         return (50 * widget.intensity).round();
       case ParticleType.heal:
-      case ParticleType.blessing:
+      case ParticleType.holy:
         return (12 * widget.intensity).round();
       default:
         return (10 * widget.intensity).round();
@@ -179,7 +138,7 @@ class _ParticleSystemState extends State<ParticleSystem>
         return (30 * widget.intensity).round();
       case ParticleType.lightning:
         return (15 * widget.intensity).round();
-      case ParticleType.dispel:
+      case ParticleType.magic:
         return (20 * widget.intensity).round();
       default:
         return (5 * widget.intensity).round();
@@ -256,7 +215,7 @@ class _ParticleSystemState extends State<ParticleSystem>
           count: 3,
         );
         
-      case ParticleType.light:
+      case ParticleType.holy:
         return ParticleConfig(
           colors: [Colors.white, Colors.yellow, Colors.amber],
           minSize: 5.0,
@@ -292,7 +251,7 @@ class _ParticleSystemState extends State<ParticleSystem>
           count: 3,
         );
         
-      case ParticleType.burn:
+      case ParticleType.fire:
         return ParticleConfig(
           colors: [Colors.red, Colors.orange, Colors.yellow.shade800],
           minSize: 2.0,
@@ -304,7 +263,7 @@ class _ParticleSystemState extends State<ParticleSystem>
           count: 4,
         );
         
-      case ParticleType.freeze:
+      case ParticleType.ice:
         return ParticleConfig(
           colors: [Colors.cyan, Colors.white, Colors.lightBlue.shade100],
           minSize: 3.0,
@@ -316,7 +275,7 @@ class _ParticleSystemState extends State<ParticleSystem>
           count: 2,
         );
         
-      case ParticleType.shock:
+      case ParticleType.lightning:
         return ParticleConfig(
           colors: [Colors.yellow, Colors.white, Colors.blue.shade300],
           minSize: 2.0,
@@ -328,7 +287,7 @@ class _ParticleSystemState extends State<ParticleSystem>
           count: 6,
         );
         
-      case ParticleType.strengthBoost:
+      case ParticleType.buff:
         return ParticleConfig(
           colors: [Colors.red, Colors.orange, Colors.yellow],
           minSize: 6.0,
@@ -364,7 +323,7 @@ class _ParticleSystemState extends State<ParticleSystem>
           count: 8,
         );
         
-      case ParticleType.dispel:
+      case ParticleType.magic:
         return ParticleConfig(
           colors: [Colors.purple, Colors.pink, Colors.white],
           minSize: 6.0,
@@ -397,13 +356,13 @@ class _ParticleSystemState extends State<ParticleSystem>
     
     // Special movement patterns for certain effects
     Offset velocity;
-    if (widget.type == ParticleType.dispel) {
+    if (widget.type == ParticleType.magic) {
       // Spiral inward
       velocity = Offset(
         math.cos(angle) * speed.abs(),
         math.sin(angle) * speed.abs(),
       );
-    } else if (widget.type == ParticleType.heal || widget.type == ParticleType.blessing) {
+    } else if (widget.type == ParticleType.heal || widget.type == ParticleType.holy) {
       // Gentle upward float
       velocity = Offset(
         math.cos(angle) * speed.abs() * 0.3,

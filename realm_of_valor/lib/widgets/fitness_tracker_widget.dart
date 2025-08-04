@@ -1,463 +1,299 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../constants/theme.dart';
 import '../services/fitness_tracker_service.dart';
-import '../models/physical_activity_model.dart';
+import '../services/audio_service.dart';
 
 class FitnessTrackerWidget extends StatefulWidget {
-  final bool showCompact;
-  final VoidCallback? onTap;
-
-  const FitnessTrackerWidget({
-    Key? key,
-    this.showCompact = false,
-    this.onTap,
-  }) : super(key: key);
+  const FitnessTrackerWidget({super.key});
 
   @override
-  _FitnessTrackerWidgetState createState() => _FitnessTrackerWidgetState();
+  State<FitnessTrackerWidget> createState() => _FitnessTrackerWidgetState();
 }
 
 class _FitnessTrackerWidgetState extends State<FitnessTrackerWidget>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
-  FitnessTrackerService? _fitnessService;
-  RealTimeMetrics? _currentMetrics;
-  FitnessStatBoosts? _currentBoosts;
+    with TickerProviderStateMixin {
+  late TabController _tabController;
+  WorkoutSession? _currentSession;
+  bool _isWorkoutActive = false;
 
   @override
   void initState() {
     super.initState();
-    
-    _pulseController = AnimationController(
-      duration: const Duration(milliseconds: 1000),
-      vsync: this,
-    );
-    
-    _pulseAnimation = Tween<double>(begin: 0.8, end: 1.2).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _fitnessService = Provider.of<FitnessTrackerService>(context, listen: false);
-    _setupStreams();
-  }
-
-  void _setupStreams() {
-    _fitnessService?.metricsStream?.listen((metrics) {
-      setState(() {
-        _currentMetrics = metrics;
-      });
-      
-      // Pulse animation based on heart rate
-      if (metrics.heartRate != null && metrics.heartRate! > 100) {
-        _pulseController.repeat(reverse: true);
-      } else {
-        _pulseController.stop();
-      }
-    });
-    
-    _fitnessService?.boostsStream?.listen((boosts) {
-      setState(() {
-        _currentBoosts = boosts;
-      });
-    });
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.showCompact) {
-      return _buildCompactView();
-    }
-    return _buildFullView();
+    return Scaffold(
+      backgroundColor: RealmOfValorTheme.surfaceDark,
+      appBar: AppBar(
+        title: const Text('Fitness Tracker'),
+        backgroundColor: RealmOfValorTheme.surfaceDark,
+        foregroundColor: RealmOfValorTheme.textPrimary,
+        bottom: TabBar(
+          controller: _tabController,
+          indicatorColor: RealmOfValorTheme.accentGold,
+          labelColor: RealmOfValorTheme.accentGold,
+          unselectedLabelColor: RealmOfValorTheme.textSecondary,
+          tabs: const [
+            Tab(text: 'Workouts'),
+            Tab(text: 'Progress'),
+            Tab(text: 'Goals'),
+          ],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildWorkoutsTab(),
+          _buildProgressTab(),
+          _buildGoalsTab(),
+        ],
+      ),
+    );
   }
 
-  Widget _buildCompactView() {
-    return GestureDetector(
-      onTap: widget.onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Colors.red.withOpacity(0.1), Colors.orange.withOpacity(0.1)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.red.withOpacity(0.3)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedBuilder(
-              animation: _pulseAnimation,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _pulseAnimation.value,
-                  child: Icon(
-                    Icons.favorite,
-                    color: _getHeartRateColor(),
-                    size: 20,
-                  ),
-                );
-              },
-            ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  '${_currentMetrics?.heartRate ?? "--"} BPM',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                Text(
-                  _getZoneText(),
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: _getHeartRateColor(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(width: 8),
-            if (_getTotalActiveBoosts() > 0)
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: Colors.amber,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '+${_getTotalActiveBoosts()}',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black,
-                  ),
+  Widget _buildWorkoutsTab() {
+    return Consumer<FitnessTrackerService>(
+      builder: (context, fitnessService, child) {
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Start a Workout',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: RealmOfValorTheme.textPrimary,
                 ),
               ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFullView() {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.fitness_center, color: Theme.of(context).primaryColor),
-                const SizedBox(width: 8),
-                const Text(
-                  'Fitness Tracker',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const Spacer(),
-                _buildConnectionStatus(),
+              const SizedBox(height: 16),
+              if (_isWorkoutActive) ...[
+                _buildActiveWorkoutCard(fitnessService),
+                const SizedBox(height: 16),
               ],
+              Expanded(
+                child: GridView.builder(
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.2,
+                  ),
+                  itemCount: FitnessActivityType.values.length,
+                  itemBuilder: (context, index) {
+                    final activityType = FitnessActivityType.values[index];
+                    return _buildWorkoutCard(activityType, fitnessService);
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildWorkoutCard(FitnessActivityType activityType, FitnessTrackerService fitnessService) {
+    return GestureDetector(
+      onTap: () => _startWorkout(activityType, fitnessService),
+      child: Container(
+        decoration: BoxDecoration(
+          color: RealmOfValorTheme.surfaceMedium,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: RealmOfValorTheme.accentGold.withOpacity(0.3)),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              _getActivityIcon(activityType),
+              style: const TextStyle(fontSize: 32),
             ),
-            const SizedBox(height: 16),
-            
-            // Real-time metrics
-            _buildRealTimeMetrics(),
-            const SizedBox(height: 16),
-            
-            // Heart rate zone
-            _buildHeartRateZone(),
-            const SizedBox(height: 16),
-            
-            // Active boosts
-            _buildActiveBoosts(),
-            const SizedBox(height: 16),
-            
-            // Energy and stress levels
-            _buildEnergyStress(),
+            const SizedBox(height: 8),
+            Text(
+              _getActivityName(activityType),
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.bold,
+                color: RealmOfValorTheme.textPrimary,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${_getCaloriesPerMinute(activityType).toStringAsFixed(1)} cal/min',
+              style: TextStyle(
+                fontSize: 12,
+                color: RealmOfValorTheme.textSecondary,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildConnectionStatus() {
-    final trackers = _fitnessService?.connectedTrackers ?? {};
-    
-    return Row(
-      children: [
-        Icon(
-          trackers.isNotEmpty ? Icons.bluetooth_connected : Icons.bluetooth_disabled,
-          color: trackers.isNotEmpty ? Colors.green : Colors.grey,
-          size: 16,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          '${trackers.length} device${trackers.length != 1 ? 's' : ''}',
-          style: const TextStyle(fontSize: 12),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildRealTimeMetrics() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildMetricCard(
-            'Heart Rate',
-            '${_currentMetrics?.heartRate ?? "--"}',
-            'BPM',
-            Icons.favorite,
-            _getHeartRateColor(),
-            showPulse: _currentMetrics?.heartRate != null,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildMetricCard(
-            'Steps',
-            '${_currentMetrics?.steps ?? "--"}',
-            'today',
-            Icons.directions_walk,
-            Colors.blue,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildMetricCard(
-            'Calories',
-            '${_currentMetrics?.calories.toStringAsFixed(1) ?? "--"}',
-            'burned',
-            Icons.local_fire_department,
-            Colors.orange,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMetricCard(
-    String title,
-    String value,
-    String unit,
-    IconData icon,
-    Color color, {
-    bool showPulse = false,
-  }) {
-    Widget iconWidget = Icon(icon, color: color, size: 20);
-    
-    if (showPulse && _currentMetrics?.heartRate != null) {
-      iconWidget = AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          return Transform.scale(
-            scale: _pulseAnimation.value,
-            child: Icon(icon, color: color, size: 20),
-          );
-        },
-      );
-    }
-
+  Widget _buildActiveWorkoutCard(FitnessTrackerService fitnessService) {
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
+        color: Colors.green.withOpacity(0.2),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          iconWidget,
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          Text(
-            unit,
-            style: const TextStyle(fontSize: 10),
-          ),
-          Text(
-            title,
-            style: const TextStyle(fontSize: 10),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildHeartRateZone() {
-    final zone = _currentMetrics?.heartRateZone;
-    if (zone == null) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.analytics, color: Colors.grey),
-            SizedBox(width: 8),
-            Text('Heart Rate Zone: Not Available'),
-          ],
-        ),
-      );
-    }
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: _getZoneColor(zone).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: _getZoneColor(zone).withOpacity(0.3)),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.analytics, color: _getZoneColor(zone)),
-          const SizedBox(width: 8),
-          Text(
-            'Zone: ${_getZoneDisplayName(zone)}',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: _getZoneColor(zone),
-            ),
-          ),
-          const Spacer(),
-          if (_currentMetrics?.isWorkingOut == true)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
+          Row(
+            children: [
+              Icon(
+                Icons.fitness_center,
                 color: Colors.green,
-                borderRadius: BorderRadius.circular(12),
+                size: 24,
               ),
-              child: const Text(
-                'ACTIVE WORKOUT',
+              const SizedBox(width: 8),
+              Text(
+                'Active Workout',
                 style: TextStyle(
-                  fontSize: 10,
+                  fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: Colors.green,
                 ),
               ),
-            ),
+              const Spacer(),
+              IconButton(
+                onPressed: () => _endWorkout(fitnessService),
+                icon: const Icon(Icons.stop, color: Colors.red),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildWorkoutStat('Duration', '${_currentSession?.duration.inMinutes ?? 0} min'),
+              ),
+              Expanded(
+                child: _buildWorkoutStat('Calories', '${_currentSession?.caloriesBurned ?? 0}'),
+              ),
+              Expanded(
+                child: _buildWorkoutStat('Distance', '${(_currentSession?.distance ?? 0).toStringAsFixed(1)} km'),
+              ),
+            ],
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildActiveBoosts() {
-    final allBoosts = [
-      ...(_currentBoosts?.realTimeBoosts ?? []),
-      ...(_currentBoosts?.dailyBoosts ?? []),
-      ...(_currentBoosts?.weeklyBoosts ?? []),
-    ].where((boost) => !boost.isExpired).toList();
-
-    if (allBoosts.isEmpty) {
-      return Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.grey.withOpacity(0.1),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Row(
-          children: [
-            Icon(Icons.trending_up, color: Colors.grey),
-            SizedBox(width: 8),
-            Text('No Active Fitness Boosts'),
-          ],
-        ),
-      );
-    }
-
+  Widget _buildWorkoutStat(String label, String value) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(Icons.trending_up, color: Colors.amber[700]),
-            const SizedBox(width: 8),
-            Text(
-              'Active Boosts (${allBoosts.length})',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...allBoosts.take(3).map((boost) => _buildBoostCard(boost)),
-        if (allBoosts.length > 3)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Text(
-              '... and ${allBoosts.length - 3} more',
-              style: const TextStyle(fontSize: 12, color: Colors.grey),
-            ),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: RealmOfValorTheme.textSecondary,
           ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: RealmOfValorTheme.textPrimary,
+          ),
+        ),
       ],
     );
   }
 
-  Widget _buildBoostCard(StatBoost boost) {
+  Widget _buildProgressTab() {
+    return Consumer<FitnessTrackerService>(
+      builder: (context, fitnessService, child) {
+        final stats = fitnessService.getFitnessStatistics();
+        
+        return Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Fitness Progress',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: RealmOfValorTheme.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView(
+                  children: [
+                    _buildProgressCard('Today', '${stats['todayActivities']} activities', Icons.today),
+                    const SizedBox(height: 12),
+                    _buildProgressCard('This Week', '${stats['weekActivities']} activities', Icons.view_week),
+                    const SizedBox(height: 12),
+                    _buildProgressCard('This Month', '${stats['monthActivities']} activities', Icons.calendar_month),
+                    const SizedBox(height: 12),
+                    _buildProgressCard('Total', '${stats['totalActivities']} activities', Icons.fitness_center),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProgressCard(String title, String value, IconData icon) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 4),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.amber.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.amber.withOpacity(0.3)),
+        color: RealmOfValorTheme.surfaceMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: RealmOfValorTheme.accentGold.withOpacity(0.3)),
       ),
       child: Row(
         children: [
           Icon(
-            _getBoostIcon(boost.statType),
-            size: 16,
-            color: Colors.amber[700],
+            icon,
+            color: RealmOfValorTheme.accentGold,
+            size: 24,
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  boost.name,
-                  style: const TextStyle(
-                    fontSize: 12,
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: RealmOfValorTheme.textPrimary,
                   ),
                 ),
                 Text(
-                  boost.description,
-                  style: const TextStyle(fontSize: 10),
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: RealmOfValorTheme.textSecondary,
+                  ),
                 ),
               ],
-            ),
-          ),
-          Text(
-            '+${boost.bonusValue}',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-              color: Colors.amber[700],
             ),
           ),
         ],
@@ -465,167 +301,219 @@ class _FitnessTrackerWidgetState extends State<FitnessTrackerWidget>
     );
   }
 
-  Widget _buildEnergyStress() {
-    return Row(
-      children: [
-        Expanded(
-          child: _buildLevelBar(
-            'Energy',
-            _currentMetrics?.energyLevel ?? 0.7,
-            Colors.green,
-            Icons.battery_charging_full,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildLevelBar(
-            'Stress',
-            _currentMetrics?.stressLevel ?? 0.5,
-            Colors.red,
-            Icons.psychology,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLevelBar(String label, double value, Color color, IconData icon) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, size: 16, color: color),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+  Widget _buildGoalsTab() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Fitness Goals',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: RealmOfValorTheme.textPrimary,
             ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        LinearProgressIndicator(
-          value: value,
-          backgroundColor: Colors.grey.withOpacity(0.3),
-          valueColor: AlwaysStoppedAnimation<Color>(color),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          '${(value * 100).round()}%',
-          style: const TextStyle(fontSize: 10),
-        ),
-      ],
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: ListView(
+              children: [
+                _buildGoalCard('Daily Steps', '10,000 steps', 0.7, Icons.directions_walk),
+                const SizedBox(height: 12),
+                _buildGoalCard('Weekly Workouts', '5 workouts', 0.6, Icons.fitness_center),
+                const SizedBox(height: 12),
+                _buildGoalCard('Monthly Distance', '100 km', 0.4, Icons.timeline),
+                const SizedBox(height: 12),
+                _buildGoalCard('Calories Burned', '2,000 calories', 0.8, Icons.local_fire_department),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Color _getHeartRateColor() {
-    final hr = _currentMetrics?.heartRate;
-    if (hr == null) return Colors.grey;
-    
-    if (hr < 60) return Colors.blue;
-    if (hr < 100) return Colors.green;
-    if (hr < 140) return Colors.orange;
-    return Colors.red;
-  }
-
-  Color _getZoneColor(HeartRateZone zone) {
-    switch (zone) {
-      case HeartRateZone.resting:
-        return Colors.blue;
-      case HeartRateZone.fatBurn:
-        return Colors.green;
-      case HeartRateZone.aerobic:
-        return Colors.orange;
-      case HeartRateZone.anaerobic:
-        return Colors.red;
-      case HeartRateZone.peak:
-        return Colors.purple;
-    }
-  }
-
-  String _getZoneDisplayName(HeartRateZone zone) {
-    switch (zone) {
-      case HeartRateZone.resting:
-        return 'Resting';
-      case HeartRateZone.fatBurn:
-        return 'Fat Burn';
-      case HeartRateZone.aerobic:
-        return 'Aerobic';
-      case HeartRateZone.anaerobic:
-        return 'Anaerobic';
-      case HeartRateZone.peak:
-        return 'Peak';
-    }
-  }
-
-  String _getZoneText() {
-    final zone = _currentMetrics?.heartRateZone;
-    if (zone == null) return 'No Zone';
-    return _getZoneDisplayName(zone);
-  }
-
-  IconData _getBoostIcon(String statType) {
-    switch (statType) {
-      case 'strength':
-        return Icons.fitness_center;
-      case 'dexterity':
-        return Icons.speed;
-      case 'vitality':
-        return Icons.favorite;
-      case 'intelligence':
-        return Icons.psychology;
-      case 'all':
-        return Icons.star;
-      default:
-        return Icons.trending_up;
-    }
-  }
-
-  int _getTotalActiveBoosts() {
-    return (_currentBoosts?.realTimeBoosts.length ?? 0) +
-           (_currentBoosts?.dailyBoosts.length ?? 0) +
-           (_currentBoosts?.weeklyBoosts.length ?? 0);
-  }
-}
-
-class FitnessTrackerDialog extends StatelessWidget {
-  const FitnessTrackerDialog({Key? key}) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: Container(
-        constraints: const BoxConstraints(maxWidth: 400, maxHeight: 600),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+  Widget _buildGoalCard(String title, String target, double progress, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: RealmOfValorTheme.surfaceMedium,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: RealmOfValorTheme.accentGold.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              Row(
-                children: [
-                  const Icon(Icons.fitness_center),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'Fitness Tracker Dashboard',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  const Spacer(),
-                  IconButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Icons.close),
-                  ),
-                ],
+              Icon(
+                icon,
+                color: RealmOfValorTheme.accentGold,
+                size: 24,
               ),
-              const SizedBox(height: 16),
-              const Expanded(
-                child: SingleChildScrollView(
-                  child: FitnessTrackerWidget(showCompact: false),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: RealmOfValorTheme.textPrimary,
+                      ),
+                    ),
+                    Text(
+                      target,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: RealmOfValorTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${(progress * 100).round()}%',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: RealmOfValorTheme.accentGold,
                 ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: progress,
+            backgroundColor: RealmOfValorTheme.surfaceDark,
+            valueColor: AlwaysStoppedAnimation<Color>(RealmOfValorTheme.accentGold),
+          ),
+        ],
       ),
     );
+  }
+
+  void _startWorkout(FitnessActivityType activityType, FitnessTrackerService fitnessService) {
+    AudioService.instance.playSound(AudioType.buttonClick);
+    
+    fitnessService.startWorkoutSession(activityType);
+    
+    setState(() {
+      _isWorkoutActive = true;
+      _currentSession = WorkoutSession(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        activityType: activityType,
+        startTime: DateTime.now(),
+      );
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Started ${_getActivityName(activityType)} workout'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _endWorkout(FitnessTrackerService fitnessService) {
+    AudioService.instance.playSound(AudioType.buttonClick);
+    
+    fitnessService.endWorkoutSession();
+    
+    setState(() {
+      _isWorkoutActive = false;
+      _currentSession = null;
+    });
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Workout completed! Stats and rewards applied.'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  String _getActivityIcon(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.walking:
+        return '🚶';
+      case FitnessActivityType.running:
+        return '🏃';
+      case FitnessActivityType.cycling:
+        return '🚴';
+      case FitnessActivityType.swimming:
+        return '🏊';
+      case FitnessActivityType.yoga:
+        return '🧘';
+      case FitnessActivityType.steps:
+        return '👣';
+      case FitnessActivityType.weightlifting:
+        return '🏋️';
+      case FitnessActivityType.hiking:
+        return '🏔️';
+      case FitnessActivityType.dancing:
+        return '💃';
+      case FitnessActivityType.tennis:
+        return '🎾';
+      case FitnessActivityType.basketball:
+        return '🏀';
+    }
+  }
+
+  String _getActivityName(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.walking:
+        return 'Walking';
+      case FitnessActivityType.running:
+        return 'Running';
+      case FitnessActivityType.cycling:
+        return 'Cycling';
+      case FitnessActivityType.swimming:
+        return 'Swimming';
+      case FitnessActivityType.yoga:
+        return 'Yoga';
+      case FitnessActivityType.steps:
+        return 'Steps';
+      case FitnessActivityType.weightlifting:
+        return 'Weightlifting';
+      case FitnessActivityType.hiking:
+        return 'Hiking';
+      case FitnessActivityType.dancing:
+        return 'Dancing';
+      case FitnessActivityType.tennis:
+        return 'Tennis';
+      case FitnessActivityType.basketball:
+        return 'Basketball';
+    }
+  }
+
+  double _getCaloriesPerMinute(FitnessActivityType activityType) {
+    switch (activityType) {
+      case FitnessActivityType.steps:
+        return 2.0;
+      case FitnessActivityType.walking:
+        return 4.0;
+      case FitnessActivityType.running:
+        return 10.0;
+      case FitnessActivityType.cycling:
+        return 8.0;
+      case FitnessActivityType.swimming:
+        return 9.0;
+      case FitnessActivityType.weightlifting:
+        return 6.0;
+      case FitnessActivityType.yoga:
+        return 3.0;
+      case FitnessActivityType.hiking:
+        return 7.0;
+      case FitnessActivityType.dancing:
+        return 5.0;
+      case FitnessActivityType.tennis:
+        return 8.5;
+      case FitnessActivityType.basketball:
+        return 9.5;
+    }
   }
 } 

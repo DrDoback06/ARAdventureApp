@@ -1,5 +1,5 @@
 name: realm_of_valor
-description: "Realm of Valor - A hybrid card-based and role-playing game with dark whimsical fantasy elements."
+description: "A new Flutter project."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.5.3
+  sdk: '>=3.2.3 <4.0.0'
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -32,7 +32,7 @@ dependencies:
     sdk: flutter
 
   # Core UI and Material Design
-  cupertino_icons: ^1.0.8
+  cupertino_icons: ^1.0.2
   
   # Firebase integration for backend services
   firebase_core: ^3.6.0
@@ -41,7 +41,7 @@ dependencies:
   firebase_storage: ^12.3.2
   
   # State management
-  provider: ^6.1.2
+  provider: ^6.1.1
   
   # QR Code scanning
   qr_code_scanner: ^1.0.1
@@ -49,6 +49,7 @@ dependencies:
   
   # Google Maps integration
   google_maps_flutter: ^2.9.0
+  google_maps_flutter_web: ^0.5.3+3
   geolocator: ^13.0.1
   
   # Image handling and caching
@@ -71,7 +72,7 @@ dependencies:
   flutter_staggered_animations: ^1.1.1
   
   # Local storage
-  shared_preferences: ^2.3.2
+  shared_preferences: ^2.2.2
   
   # Path operations
   path_provider: ^2.1.4
@@ -122,13 +123,14 @@ dependencies:
   
   # GPX file support for trails
   gpx: ^2.2.1
+  camera: ^0.10.5+9
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
   # Linting and code quality
-  flutter_lints: ^4.0.0
+  flutter_lints: ^3.0.0
   
   # JSON serialization code generation
   json_serializable: ^6.8.0
@@ -151,6 +153,7 @@ flutter:
     - assets/icons/
     - assets/cards/
     - assets/characters/
+    - assets/sounds/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

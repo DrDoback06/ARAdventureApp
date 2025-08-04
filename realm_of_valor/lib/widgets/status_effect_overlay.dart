@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../effects/particle_system.dart';
+import '../models/unified_particle_system.dart';
 import 'dart:math' as math;
 
 enum StatusEffectType {
@@ -259,16 +260,16 @@ class _StatusEffectOverlayState extends State<StatusEffectOverlay>
     
     switch (effect.type) {
       case StatusEffectType.burning:
-        particleType = ParticleType.burn;
+        particleType = ParticleType.fire;
         break;
       case StatusEffectType.frozen:
-        particleType = ParticleType.freeze;
+        particleType = ParticleType.ice;
         break;
       case StatusEffectType.shocked:
-        particleType = ParticleType.shock;
+        particleType = ParticleType.lightning;
         break;
       case StatusEffectType.strengthened:
-        particleType = ParticleType.strengthBoost;
+        particleType = ParticleType.buff;
         break;
       case StatusEffectType.shielded:
         particleType = ParticleType.shield;
@@ -277,13 +278,13 @@ class _StatusEffectOverlayState extends State<StatusEffectOverlay>
         particleType = ParticleType.heal;
         break;
       case StatusEffectType.blessed:
-        particleType = ParticleType.light;
+        particleType = ParticleType.holy;
         break;
       case StatusEffectType.cursed:
         particleType = ParticleType.shadow;
         break;
       case StatusEffectType.poisoned:
-        particleType = ParticleType.nature;
+        particleType = ParticleType.earth;
         break;
       default:
         particleType = ParticleType.sparkle;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../effects/particle_system.dart';
 import '../models/battle_model.dart';
+import '../models/unified_particle_system.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -649,7 +650,7 @@ class _SpellCastingAnimationState extends State<SpellCastingAnimation>
     } else if (spellName.contains('water') || spellName.contains('wave')) {
       return ParticleType.water;
     } else if (spellName.contains('light') || spellName.contains('divine')) {
-      return ParticleType.light;
+      return ParticleType.holy;
     } else if (spellName.contains('shadow') || spellName.contains('dark')) {
       return ParticleType.shadow;
     } else if (spellName.contains('heal') || spellName.contains('cure')) {

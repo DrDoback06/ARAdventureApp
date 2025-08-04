@@ -1,630 +1,569 @@
-import 'dart:async';
-import 'dart:convert';
-import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/character_model.dart';
 import '../models/card_model.dart';
-import '../models/battle_model.dart';
-import '../models/quest_model.dart';
 
-enum QRCardType {
-  item,
-  enemy,
+enum QRScanMode {
+  card,
   quest,
-  skill,
-  spell,
-  attribute,
+  enemy,
+  item,
+  location,
+  achievement,
+}
+
+enum QRCodeType {
+  card,
+  quest,
+  enemy,
+  item,
+  location,
+  achievement,
   unknown,
 }
 
-class QRScanResult {
-  final QRCardType type;
-  final dynamic data;
-  final String rawData;
-  final List<String> availableActions;
+class QRCodeData {
+  final String id;
+  final QRCodeType type;
+  final String title;
+  final String description;
+  final Map<String, dynamic> data;
+  final DateTime scannedAt;
+  final bool isRedeemed;
 
-  QRScanResult({
+  const QRCodeData({
+    required this.id,
     required this.type,
+    required this.title,
+    required this.description,
     required this.data,
-    required this.rawData,
-    required this.availableActions,
+    required this.scannedAt,
+    this.isRedeemed = false,
   });
+
+  QRCodeData copyWith({
+    bool? isRedeemed,
+  }) {
+    return QRCodeData(
+      id: id,
+      type: type,
+      title: title,
+      description: description,
+      data: data,
+      scannedAt: scannedAt,
+      isRedeemed: isRedeemed ?? this.isRedeemed,
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'type': type.name,
+      'title': title,
+      'description': description,
+      'data': data,
+      'scannedAt': scannedAt.millisecondsSinceEpoch,
+      'isRedeemed': isRedeemed,
+    };
+  }
+
+  factory QRCodeData.fromJson(Map<String, dynamic> json) {
+    return QRCodeData(
+      id: json['id'] as String,
+      type: QRCodeType.values.firstWhere(
+        (e) => e.name == json['type'],
+      ),
+      title: json['title'] as String,
+      description: json['description'] as String,
+      data: Map<String, dynamic>.from(json['data'] as Map),
+      scannedAt: DateTime.fromMillisecondsSinceEpoch(json['scannedAt'] as int),
+      isRedeemed: json['isRedeemed'] as bool? ?? false,
+    );
+  }
 }
 
-class QRScannerService {
+class QRScannerService extends ChangeNotifier {
   static QRScannerService? _instance;
-  static Future<QRScannerService> getInstance() async {
-    _instance ??= QRScannerService._internal();
-    return _instance!;
-  }
-  
-  QRScannerService._internal();
+  static QRScannerService get instance => _instance ??= QRScannerService._();
+  QRScannerService._();
 
-  Future<bool> requestCameraPermission() async {
-    final status = await Permission.camera.request();
-    return status.isGranted;
+  late SharedPreferences _prefs;
+  bool _isInitialized = false;
+
+  // QR Scanner data
+  final List<QRCodeData> _scannedCodes = [];
+  final Map<String, QRCodeData> _availableCodes = {};
+  QRScanMode _currentMode = QRScanMode.card;
+
+  // Getters
+  List<QRCodeData> get scannedCodes => List.unmodifiable(_scannedCodes);
+  Map<String, QRCodeData> get availableCodes => Map.unmodifiable(_availableCodes);
+  QRScanMode get currentMode => _currentMode;
+
+  // Initialize service
+  Future<void> initialize() async {
+    if (_isInitialized) return;
+
+    _prefs = await SharedPreferences.getInstance();
+    await _loadQRData();
+    _initializeSampleCodes();
+    _isInitialized = true;
+    notifyListeners();
   }
 
-  Future<QRScanResult?> scanAndParseQR(String qrData) async {
-    try {
-      // Try to parse as JSON first
-      final Map<String, dynamic> data = jsonDecode(qrData);
-      
-      // Determine card type based on data structure
-      if (data.containsKey('type')) {
-        switch (data['type']) {
-          case 'item':
-          case 'weapon':
-          case 'armor':
-          case 'accessory':
-          case 'consumable':
-            return _parseItemCard(data);
-          case 'enemy':
-            return _parseEnemyCard(data);
-          case 'quest':
-            return _parseQuestCard(data);
-          case 'skill':
-            return _parseSkillCard(data);
-          case 'spell':
-            return _parseSpellCard(data);
-          case 'attribute':
-            return _parseAttributeCard(data);
-          default:
-            return QRScanResult(
-              type: QRCardType.unknown,
-              data: data,
-              rawData: qrData,
-              availableActions: ['Dismiss'],
-            );
+  // Load QR data from preferences
+  Future<void> _loadQRData() async {
+    final scannedCodesJson = _prefs.getStringList('qr_scanned_codes') ?? [];
+    _scannedCodes.clear();
+    for (final json in scannedCodesJson) {
+      try {
+        final data = Map<String, dynamic>.from(json as Map);
+        _scannedCodes.add(QRCodeData.fromJson(data));
+      } catch (e) {
+        if (kDebugMode) {
+          print('[QRScannerService] Error loading scanned code: $e');
         }
       }
-      
-      // If no type specified, try to infer from structure
-      return _inferCardType(data, qrData);
-    } catch (e) {
-      // If JSON parsing fails, treat as plain text
-      return QRScanResult(
-        type: QRCardType.unknown,
-        data: qrData,
-        rawData: qrData,
-        availableActions: ['Dismiss'],
-      );
     }
   }
 
-  QRScanResult _parseItemCard(Map<String, dynamic> data) {
-    try {
-      final card = GameCard.fromJson(data);
-      List<String> actions = [];
-      
-      if (card.equipmentSlot != EquipmentSlot.none) {
-        actions.add('Equip');
-      }
-      
-      actions.addAll(['Add to Inventory', 'Sell', 'Discard']);
-      
-      if (card.isTradeable) {
-        actions.add('Trade');
-      }
-      
-      return QRScanResult(
-        type: QRCardType.item,
-        data: card,
-        rawData: jsonEncode(data),
-        availableActions: actions,
-      );
-    } catch (e) {
-      return QRScanResult(
-        type: QRCardType.unknown,
-        data: data,
-        rawData: jsonEncode(data),
-        availableActions: ['Dismiss'],
-      );
-    }
+  // Save QR data to preferences
+  Future<void> _saveQRData() async {
+    final scannedCodesJson = _scannedCodes
+        .map((code) => code.toJson().toString())
+        .toList();
+    await _prefs.setStringList('qr_scanned_codes', scannedCodesJson);
   }
 
-  QRScanResult _parseEnemyCard(Map<String, dynamic> data) {
-    try {
-      final enemy = EnemyCard.fromJson(data);
-      List<String> actions = [];
-      
-      // Add actions based on enemy card properties
-      if (enemy.battleActions.containsKey('challenge')) {
-        actions.add('Challenge to Battle');
-      }
-      
-      if (enemy.battleActions.containsKey('recruit')) {
-        actions.add('Recruit as Ally');
-      }
-      
-      if (enemy.battleActions.containsKey('trade')) {
-        actions.add('Trade with Enemy');
-      }
-      
-      actions.addAll(['Study Enemy', 'Add to Bestiary', 'Dismiss']);
-      
-      return QRScanResult(
-        type: QRCardType.enemy,
-        data: enemy,
-        rawData: jsonEncode(data),
-        availableActions: actions,
-      );
-    } catch (e) {
-      return QRScanResult(
-        type: QRCardType.unknown,
-        data: data,
-        rawData: jsonEncode(data),
-        availableActions: ['Dismiss'],
-      );
-    }
-  }
-
-  QRScanResult _parseQuestCard(Map<String, dynamic> data) {
-    try {
-      final quest = Quest.fromJson(data);
-      List<String> actions = [];
-      
-      if (quest.status == QuestStatus.available) {
-        actions.add('Start Quest');
-      }
-      
-      if (quest.location != null) {
-        actions.add('Show on Map');
-      }
-      
-      actions.addAll(['View Details', 'Save for Later', 'Dismiss']);
-      
-      return QRScanResult(
-        type: QRCardType.quest,
-        data: quest,
-        rawData: jsonEncode(data),
-        availableActions: actions,
-      );
-    } catch (e) {
-      return QRScanResult(
-        type: QRCardType.unknown,
-        data: data,
-        rawData: jsonEncode(data),
-        availableActions: ['Dismiss'],
-      );
-    }
-  }
-
-  QRScanResult _parseSkillCard(Map<String, dynamic> data) {
-    try {
-      final skill = GameCard.fromJson(data);
-      List<String> actions = [];
-      
-      actions.addAll(['Learn Skill', 'Add to Inventory', 'Share with Friend']);
-      
-      if (skill.levelRequirement > 1) {
-        actions.add('Save for Later');
-      }
-      
-      actions.add('Dismiss');
-      
-      return QRScanResult(
-        type: QRCardType.skill,
-        data: skill,
-        rawData: jsonEncode(data),
-        availableActions: actions,
-      );
-    } catch (e) {
-      return QRScanResult(
-        type: QRCardType.unknown,
-        data: data,
-        rawData: jsonEncode(data),
-        availableActions: ['Dismiss'],
-      );
-    }
-  }
-
-  QRScanResult _parseSpellCard(Map<String, dynamic> data) {
-    try {
-      final spell = GameCard.fromJson(data);
-      List<String> actions = [];
-      
-      actions.addAll(['Learn Spell', 'Add to Spellbook', 'Add to Inventory']);
-      
-      if (spell.isTradeable) {
-        actions.add('Trade');
-      }
-      
-      actions.add('Dismiss');
-      
-      return QRScanResult(
-        type: QRCardType.spell,
-        data: spell,
-        rawData: jsonEncode(data),
-        availableActions: actions,
-      );
-    } catch (e) {
-      return QRScanResult(
-        type: QRCardType.unknown,
-        data: data,
-        rawData: jsonEncode(data),
-        availableActions: ['Dismiss'],
-      );
-    }
-  }
-
-  QRScanResult _parseAttributeCard(Map<String, dynamic> data) {
-    List<String> actions = [];
-    
-    if (data.containsKey('bonus_type')) {
-      if (data['bonus_type'] == 'flat') {
-        actions.add('Apply Bonus');
-      } else if (data['bonus_type'] == 'choice') {
-        actions.add('Choose Attribute');
-      }
-    }
-    
-    actions.addAll(['Add to Inventory', 'Save for Later', 'Dismiss']);
-    
-    return QRScanResult(
-      type: QRCardType.attribute,
-      data: data,
-      rawData: jsonEncode(data),
-      availableActions: actions,
-    );
-  }
-
-  QRScanResult _inferCardType(Map<String, dynamic> data, String rawData) {
-    // Try to infer card type from common fields
-    if (data.containsKey('equipmentSlot') || data.containsKey('statModifiers')) {
-      return _parseItemCard(data);
-    }
-    
-    if (data.containsKey('health') && data.containsKey('attackPower')) {
-      return _parseEnemyCard(data);
-    }
-    
-    if (data.containsKey('objectives') || data.containsKey('location')) {
-      return _parseQuestCard(data);
-    }
-    
-    return QRScanResult(
-      type: QRCardType.unknown,
-      data: data,
-      rawData: rawData,
-      availableActions: ['Dismiss'],
-    );
-  }
-
-  Future<void> showQRResultPopup(BuildContext context, QRScanResult result) async {
-    await showDialog(
-      context: context,
-      builder: (context) => QRResultDialog(result: result),
-    );
-  }
-
-  // Generate some example QR codes for testing
-  String generateSampleItemQR() {
-    final card = GameCard(
-      name: 'Dragon Slayer Sword',
-      description: 'A legendary sword forged from dragon scales',
-      type: CardType.weapon,
-      rarity: CardRarity.legendary,
-      equipmentSlot: EquipmentSlot.weapon1,
-      statModifiers: [
-        StatModifier(statName: 'strength', value: 25),
-        StatModifier(statName: 'attack', value: 50),
-      ],
-      levelRequirement: 15,
-      cost: 5000,
-    );
-    
-    return jsonEncode(card.toJson());
-  }
-
-  String generateSampleEnemyQR() {
-    final enemy = EnemyCard(
-      name: 'Ancient Dragon',
-      description: 'A powerful dragon that has terrorized the land for centuries',
-      health: 500,
-      mana: 200,
-      attackPower: 80,
-      defense: 40,
-      abilities: ['Fire Breath', 'Dragon Roar', 'Tail Swipe'],
-      weaknesses: ['Ice Magic', 'Lightning'],
-      rarity: CardRarity.legendary,
-      battleActions: {
-        'challenge': true,
-        'recruit': false,
-        'trade': false,
+  // Initialize sample QR codes
+  void _initializeSampleCodes() {
+    // Card QR codes
+    _availableCodes['card_sword_legendary'] = QRCodeData(
+      id: 'card_sword_legendary',
+      type: QRCodeType.card,
+      title: 'Legendary Sword',
+      description: 'A powerful legendary sword card',
+      data: {
+        'cardId': 'sword_legendary',
+        'rarity': 'legendary',
+        'equipmentSlot': 'weapon',
+        'requiredLevel': 20,
+        'damage': 150,
+        'durability': 100,
       },
+      scannedAt: DateTime.now(),
     );
-    
-    return jsonEncode(enemy.toJson());
+
+    _availableCodes['card_shield_epic'] = QRCodeData(
+      id: 'card_shield_epic',
+      type: QRCodeType.card,
+      title: 'Epic Shield',
+      description: 'A sturdy epic shield card',
+      data: {
+        'cardId': 'shield_epic',
+        'rarity': 'epic',
+        'equipmentSlot': 'offhand',
+        'requiredLevel': 15,
+        'defense': 80,
+        'block_chance': 15,
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    // Quest QR codes
+    _availableCodes['quest_dragon_hunt'] = QRCodeData(
+      id: 'quest_dragon_hunt',
+      type: QRCodeType.quest,
+      title: 'Dragon Hunt Quest',
+      description: 'Hunt down the ancient dragon',
+      data: {
+        'questId': 'dragon_hunt',
+        'type': 'battle',
+        'requiredLevel': 25,
+        'experience': 500,
+        'gold': 200,
+        'items': ['dragon_scales', 'dragon_heart'],
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    _availableCodes['quest_treasure_map'] = QRCodeData(
+      id: 'quest_treasure_map',
+      type: QRCodeType.quest,
+      title: 'Treasure Map Quest',
+      description: 'Follow the map to find hidden treasure',
+      data: {
+        'questId': 'treasure_map',
+        'type': 'exploration',
+        'requiredLevel': 10,
+        'experience': 300,
+        'gold': 150,
+        'items': ['ancient_coin', 'gemstone'],
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    // Enemy QR codes
+    _availableCodes['enemy_dragon'] = QRCodeData(
+      id: 'enemy_dragon',
+      type: QRCodeType.enemy,
+      title: 'Ancient Dragon',
+      description: 'A powerful ancient dragon enemy',
+      data: {
+        'enemyId': 'ancient_dragon',
+        'level': 30,
+        'health': 1000,
+        'damage': 200,
+        'experience': 500,
+        'loot': ['dragon_scales', 'dragon_heart', 'gold'],
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    _availableCodes['enemy_goblin'] = QRCodeData(
+      id: 'enemy_goblin',
+      type: QRCodeType.enemy,
+      title: 'Goblin Warrior',
+      description: 'A fierce goblin warrior',
+      data: {
+        'enemyId': 'goblin_warrior',
+        'level': 5,
+        'health': 100,
+        'damage': 25,
+        'experience': 50,
+        'loot': ['goblin_ear', 'copper_coin'],
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    // Item QR codes
+    _availableCodes['item_health_potion'] = QRCodeData(
+      id: 'item_health_potion',
+      type: QRCodeType.item,
+      title: 'Health Potion',
+      description: 'Restores health when consumed',
+      data: {
+        'itemId': 'health_potion',
+        'type': 'consumable',
+        'effect': 'heal',
+        'value': 100,
+        'stackable': true,
+        'max_stack': 10,
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    _availableCodes['item_mana_potion'] = QRCodeData(
+      id: 'item_mana_potion',
+      type: QRCodeType.item,
+      title: 'Mana Potion',
+      description: 'Restores mana when consumed',
+      data: {
+        'itemId': 'mana_potion',
+        'type': 'consumable',
+        'effect': 'mana',
+        'value': 80,
+        'stackable': true,
+        'max_stack': 10,
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    // Location QR codes
+    _availableCodes['location_dragon_cave'] = QRCodeData(
+      id: 'location_dragon_cave',
+      type: QRCodeType.location,
+      title: 'Dragon Cave',
+      description: 'A dangerous cave inhabited by dragons',
+      data: {
+        'locationId': 'dragon_cave',
+        'type': 'dungeon',
+        'requiredLevel': 20,
+        'enemies': ['dragon', 'dragon_whelp'],
+        'loot': ['dragon_scales', 'dragon_heart'],
+        'experience': 1000,
+      },
+      scannedAt: DateTime.now(),
+    );
+
+    // Achievement QR codes
+    _availableCodes['achievement_first_scan'] = QRCodeData(
+      id: 'achievement_first_scan',
+      type: QRCodeType.achievement,
+      title: 'First Scan',
+      description: 'Scan your first QR code',
+      data: {
+        'achievementId': 'first_scan',
+        'experience': 50,
+        'gold': 25,
+        'title': 'QR Scanner',
+      },
+      scannedAt: DateTime.now(),
+    );
   }
 
-  String generateSampleQuestQR() {
-    final quest = Quest(
-      name: 'The Lost Temple',
-      description: 'Explore an ancient temple hidden in the mountains',
-      story: 'Local legends speak of a temple filled with untold riches...',
-      type: QuestType.exploration,
-      difficulty: QuestDifficulty.hard,
-      location: QuestLocation(
-        name: 'Mountain Temple',
-        description: 'Ancient ruins on the mountain peak',
-        latitude: 40.7128,
-        longitude: -74.0060,
-      ),
-      objectives: [
-        QuestObjective(
-          description: 'Reach the temple location',
-          type: 'location',
-          targetValue: 1,
-        ),
-        QuestObjective(
-          description: 'Solve the ancient puzzle',
-          type: 'puzzle',
-          targetValue: 3,
-        ),
-      ],
-      experienceReward: 1000,
-      goldReward: 500,
-    );
-    
-    return jsonEncode(quest.toJson());
-  }
-}
+  // Set scan mode
+  void setScanMode(QRScanMode mode) {
+    _currentMode = mode;
+    notifyListeners();
 
-class QRResultDialog extends StatelessWidget {
-  final QRScanResult result;
-  
-  const QRResultDialog({super.key, required this.result});
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_getDialogTitle()),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildCardDisplay(),
-            const SizedBox(height: 16),
-            _buildActionButtons(context),
-          ],
-        ),
-      ),
-    );
-  }
-
-  String _getDialogTitle() {
-    switch (result.type) {
-      case QRCardType.item:
-        return 'Item Found!';
-      case QRCardType.enemy:
-        return 'Enemy Encounter!';
-      case QRCardType.quest:
-        return 'Quest Available!';
-      case QRCardType.skill:
-        return 'Skill Discovered!';
-      case QRCardType.spell:
-        return 'Spell Found!';
-      case QRCardType.attribute:
-        return 'Attribute Boost!';
-      default:
-        return 'QR Code Scanned';
+    if (kDebugMode) {
+      print('[QRScannerService] Scan mode set to: ${mode.name}');
     }
   }
 
-  Widget _buildCardDisplay() {
-    switch (result.type) {
-      case QRCardType.item:
-        return _buildItemDisplay(result.data as GameCard);
-      case QRCardType.enemy:
-        return _buildEnemyDisplay(result.data as EnemyCard);
-      case QRCardType.quest:
-        return _buildQuestDisplay(result.data as Quest);
-      case QRCardType.skill:
-        return _buildSkillDisplay(result.data as GameCard);
-      case QRCardType.spell:
-        return _buildSpellDisplay(result.data as GameCard);
-      case QRCardType.attribute:
-        return _buildAttributeDisplay(result.data as Map<String, dynamic>);
-      default:
-        return Text('Unknown card type: ${result.rawData}');
+  // Scan a QR code
+  Future<QRCodeData?> scanQRCode(String qrData) async {
+    try {
+      // Parse QR data (in a real app, this would decode the actual QR code)
+      final codeData = _parseQRData(qrData);
+      
+      if (codeData != null) {
+        // Check if code is available
+        if (_availableCodes.containsKey(codeData.id)) {
+          final scannedCode = _availableCodes[codeData.id]!;
+          
+          // Add to scanned codes if not already scanned
+          if (!_scannedCodes.any((code) => code.id == scannedCode.id)) {
+            _scannedCodes.add(scannedCode);
+            await _saveQRData();
+            notifyListeners();
+
+            if (kDebugMode) {
+              print('[QRScannerService] Scanned QR code: ${scannedCode.title}');
+            }
+
+            return scannedCode;
+          } else {
+            if (kDebugMode) {
+              print('[QRScannerService] QR code already scanned: ${scannedCode.title}');
+            }
+            return null;
+          }
+        } else {
+          if (kDebugMode) {
+            print('[QRScannerService] QR code not found: $qrData');
+          }
+          return null;
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[QRScannerService] Error scanning QR code: $e');
+      }
     }
+
+    return null;
   }
 
-  Widget _buildItemDisplay(GameCard card) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          card.name,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(card.description),
-        const SizedBox(height: 8),
-        Text('Type: ${card.type.name}'),
-        Text('Rarity: ${card.rarity.name}'),
-        if (card.statModifiers.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          const Text('Stats:', style: TextStyle(fontWeight: FontWeight.bold)),
-          ...card.statModifiers.map((stat) => Text(
-            '${stat.statName}: ${stat.isPercentage ? '${stat.value}%' : '+${stat.value}'}',
-          )),
-        ],
-      ],
-    );
+  // Parse QR data (simulate QR code parsing)
+  QRCodeData? _parseQRData(String qrData) {
+    // In a real implementation, this would parse actual QR code data
+    // For now, we'll simulate by checking if the data matches our available codes
+    
+    // Check if the QR data matches any of our available codes
+    for (final code in _availableCodes.values) {
+      if (qrData.contains(code.id) || qrData.contains(code.title.toLowerCase())) {
+        return code;
+      }
+    }
+
+    // If no match found, create a generic code based on the scan mode
+    return _createGenericCode(qrData);
   }
 
-  Widget _buildEnemyDisplay(EnemyCard enemy) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          enemy.name,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(enemy.description),
-        const SizedBox(height: 8),
-        Text('Health: ${enemy.health}'),
-        Text('Attack: ${enemy.attackPower}'),
-        Text('Defense: ${enemy.defense}'),
-        if (enemy.abilities.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          const Text('Abilities:', style: TextStyle(fontWeight: FontWeight.bold)),
-          ...enemy.abilities.map((ability) => Text('• $ability')),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildQuestDisplay(Quest quest) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          quest.name,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(quest.description),
-        const SizedBox(height: 8),
-        Text('Type: ${quest.type.name}'),
-        Text('Difficulty: ${quest.difficulty.name}'),
-        Text('Experience: ${quest.experienceReward}'),
-        Text('Gold: ${quest.goldReward}'),
-        if (quest.objectives.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          const Text('Objectives:', style: TextStyle(fontWeight: FontWeight.bold)),
-          ...quest.objectives.map((obj) => Text('• ${obj.description}')),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSkillDisplay(GameCard skill) {
-    return _buildItemDisplay(skill);
-  }
-
-  Widget _buildSpellDisplay(GameCard spell) {
-    return _buildItemDisplay(spell);
-  }
-
-  Widget _buildAttributeDisplay(Map<String, dynamic> data) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          data['name'] ?? 'Attribute Boost',
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
-        Text(data['description'] ?? 'Boost your character attributes'),
-        const SizedBox(height: 8),
-        if (data['bonus_type'] == 'flat')
-          Text('${data['stat_name']}: +${data['bonus_value']}'),
-        if (data['bonus_type'] == 'choice')
-          Text('Choose any attribute: +${data['bonus_value']} points'),
-      ],
-    );
-  }
-
-  Widget _buildActionButtons(BuildContext context) {
-    return Column(
-      children: result.availableActions.map((action) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
-          child: SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => _handleAction(context, action),
-              child: Text(action),
-            ),
-          ),
+  // Create a generic QR code based on scan mode
+  QRCodeData? _createGenericCode(String qrData) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    final id = '${_currentMode.name}_${timestamp}';
+    
+    switch (_currentMode) {
+      case QRScanMode.card:
+        return QRCodeData(
+          id: id,
+          type: QRCodeType.card,
+          title: 'Mystery Card',
+          description: 'A mysterious card found through QR scanning',
+          data: {
+            'cardId': 'mystery_card_$timestamp',
+            'rarity': 'common',
+            'equipmentSlot': 'weapon',
+            'requiredLevel': 1,
+            'damage': 10,
+          },
+          scannedAt: DateTime.now(),
         );
-      }).toList(),
-    );
-  }
-
-  void _handleAction(BuildContext context, String action) {
-    Navigator.of(context).pop();
-    
-    switch (action) {
-      case 'Equip':
-        _handleEquipAction(context);
-        break;
-      case 'Add to Inventory':
-        _handleAddToInventoryAction(context);
-        break;
-      case 'Challenge to Battle':
-        _handleChallengeAction(context);
-        break;
-      case 'Start Quest':
-        _handleStartQuestAction(context);
-        break;
-      case 'Show on Map':
-        _handleShowOnMapAction(context);
-        break;
-      case 'Learn Skill':
-        _handleLearnSkillAction(context);
-        break;
-      case 'Apply Bonus':
-        _handleApplyBonusAction(context);
-        break;
-      default:
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Action "$action" not implemented yet')),
+      
+      case QRScanMode.quest:
+        return QRCodeData(
+          id: id,
+          type: QRCodeType.quest,
+          title: 'Mystery Quest',
+          description: 'A mysterious quest found through QR scanning',
+          data: {
+            'questId': 'mystery_quest_$timestamp',
+            'type': 'exploration',
+            'requiredLevel': 1,
+            'experience': 50,
+            'gold': 25,
+          },
+          scannedAt: DateTime.now(),
+        );
+      
+      case QRScanMode.enemy:
+        return QRCodeData(
+          id: id,
+          type: QRCodeType.enemy,
+          title: 'Mystery Enemy',
+          description: 'A mysterious enemy found through QR scanning',
+          data: {
+            'enemyId': 'mystery_enemy_$timestamp',
+            'level': 1,
+            'health': 50,
+            'damage': 10,
+            'experience': 25,
+          },
+          scannedAt: DateTime.now(),
+        );
+      
+      case QRScanMode.item:
+        return QRCodeData(
+          id: id,
+          type: QRCodeType.item,
+          title: 'Mystery Item',
+          description: 'A mysterious item found through QR scanning',
+          data: {
+            'itemId': 'mystery_item_$timestamp',
+            'type': 'consumable',
+            'effect': 'heal',
+            'value': 25,
+          },
+          scannedAt: DateTime.now(),
+        );
+      
+      case QRScanMode.location:
+        return QRCodeData(
+          id: id,
+          type: QRCodeType.location,
+          title: 'Mystery Location',
+          description: 'A mysterious location found through QR scanning',
+          data: {
+            'locationId': 'mystery_location_$timestamp',
+            'type': 'exploration',
+            'requiredLevel': 1,
+            'experience': 100,
+          },
+          scannedAt: DateTime.now(),
+        );
+      
+      case QRScanMode.achievement:
+        return QRCodeData(
+          id: id,
+          type: QRCodeType.achievement,
+          title: 'Mystery Achievement',
+          description: 'A mysterious achievement found through QR scanning',
+          data: {
+            'achievementId': 'mystery_achievement_$timestamp',
+            'experience': 25,
+            'gold': 10,
+          },
+          scannedAt: DateTime.now(),
         );
     }
   }
 
-  void _handleEquipAction(BuildContext context) {
-    // TODO: Implement equip logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Item equipped successfully!')),
+  // Redeem a scanned QR code
+  Future<bool> redeemQRCode(String codeId) async {
+    final scannedCode = _scannedCodes.firstWhere(
+      (code) => code.id == codeId,
+      orElse: () => throw Exception('QR code not found'),
     );
+
+    if (scannedCode.isRedeemed) {
+      if (kDebugMode) {
+        print('[QRScannerService] QR code already redeemed: ${scannedCode.title}');
+      }
+      return false;
+    }
+
+    // Mark as redeemed
+    final index = _scannedCodes.indexWhere((code) => code.id == codeId);
+    if (index != -1) {
+      _scannedCodes[index] = scannedCode.copyWith(isRedeemed: true);
+      await _saveQRData();
+      notifyListeners();
+
+      if (kDebugMode) {
+        print('[QRScannerService] Redeemed QR code: ${scannedCode.title}');
+      }
+
+      return true;
+    }
+
+    return false;
   }
 
-  void _handleAddToInventoryAction(BuildContext context) {
-    // TODO: Implement add to inventory logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Item added to inventory!')),
-    );
+  // Get scanned codes by type
+  List<QRCodeData> getScannedCodesByType(QRCodeType type) {
+    return _scannedCodes.where((code) => code.type == type).toList();
   }
 
-  void _handleChallengeAction(BuildContext context) {
-    // TODO: Implement battle challenge logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Battle challenge initiated!')),
-    );
+  // Get available codes by type
+  List<QRCodeData> getAvailableCodesByType(QRCodeType type) {
+    return _availableCodes.values.where((code) => code.type == type).toList();
   }
 
-  void _handleStartQuestAction(BuildContext context) {
-    // TODO: Implement quest start logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Quest started!')),
-    );
+  // Get QR scanner statistics
+  Map<String, dynamic> getQRScannerStatistics() {
+    final totalScanned = _scannedCodes.length;
+    final totalRedeemed = _scannedCodes.where((code) => code.isRedeemed).length;
+    final totalAvailable = _availableCodes.length;
+
+    final typeStats = <String, int>{};
+    for (final type in QRCodeType.values) {
+      typeStats[type.name] = _scannedCodes.where((code) => code.type == type).length;
+    }
+
+    return {
+      'totalScanned': totalScanned,
+      'totalRedeemed': totalRedeemed,
+      'totalAvailable': totalAvailable,
+      'completionRate': totalAvailable > 0 ? totalScanned / totalAvailable : 0.0,
+      'redemptionRate': totalScanned > 0 ? totalRedeemed / totalScanned : 0.0,
+      'typeStats': typeStats,
+    };
   }
 
-  void _handleShowOnMapAction(BuildContext context) {
-    // TODO: Implement show on map logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Showing quest location on map!')),
-    );
+  // Clear all scanned codes (for testing)
+  void clearScannedCodes() {
+    _scannedCodes.clear();
+    _saveQRData();
+    notifyListeners();
+
+    if (kDebugMode) {
+      print('[QRScannerService] Cleared all scanned codes');
+    }
   }
 
-  void _handleLearnSkillAction(BuildContext context) {
-    // TODO: Implement learn skill logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Skill learned!')),
-    );
+  // Add a custom QR code
+  void addCustomQRCode(QRCodeData code) {
+    _availableCodes[code.id] = code;
+    notifyListeners();
+
+    if (kDebugMode) {
+      print('[QRScannerService] Added custom QR code: ${code.title}');
+    }
   }
 
-  void _handleApplyBonusAction(BuildContext context) {
-    // TODO: Implement apply bonus logic
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attribute bonus applied!')),
-    );
+  // Remove a QR code
+  void removeQRCode(String codeId) {
+    _availableCodes.remove(codeId);
+    _scannedCodes.removeWhere((code) => code.id == codeId);
+    _saveQRData();
+    notifyListeners();
+
+    if (kDebugMode) {
+      print('[QRScannerService] Removed QR code: $codeId');
+    }
   }
 }
