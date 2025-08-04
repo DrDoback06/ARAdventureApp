@@ -27,6 +27,8 @@ import 'services/agents/social_features_agent.dart';
 import 'services/agents/ar_rendering_agent.dart';
 import 'services/agents/analytics_agent.dart';
 import 'services/agents/weather_integration_agent.dart';
+import 'services/agents/ai_companion_agent.dart';
+import 'services/agents/performance_optimization_agent.dart';
 import 'screens/home_screen.dart';
 
 void main() async {
@@ -67,6 +69,8 @@ Future<void> _initializeAgentSystem() async {
     final arAgent = ARRenderingAgent(prefs: prefs);
     final analyticsAgent = AnalyticsAgent(prefs: prefs);
     final weatherAgent = WeatherIntegrationAgent(prefs: prefs);
+    final aiCompanionAgent = AICompanionAgent(prefs: prefs);
+    final performanceAgent = PerformanceOptimizationAgent(prefs: prefs);
     
     await AgentOrchestrator.instance.registerAgent(characterAgent);
     await AgentOrchestrator.instance.registerAgent(fitnessAgent);
@@ -82,6 +86,8 @@ Future<void> _initializeAgentSystem() async {
     await AgentOrchestrator.instance.registerAgent(arAgent);
     await AgentOrchestrator.instance.registerAgent(analyticsAgent);
     await AgentOrchestrator.instance.registerAgent(weatherAgent);
+    await AgentOrchestrator.instance.registerAgent(aiCompanionAgent);
+    await AgentOrchestrator.instance.registerAgent(performanceAgent);
     
     print('Agent system initialized successfully');
   } catch (e) {
