@@ -6,6 +6,11 @@ import 'package:geocoding/geocoding.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/adventure_system.dart';
 import 'dart:convert';
+import 'package:http/http.dart' as http;
+
+extension StringExtension on String {
+  String get capitalized => this.isEmpty ? this : this[0].toUpperCase() + this.substring(1);
+}
 
 class LocationEvent {
   final String id;
@@ -151,51 +156,79 @@ class EnhancedLocationService {
   factory EnhancedLocationService() => _instance;
   EnhancedLocationService._internal();
 
-  StreamController<GeoLocation>? _locationController;
-  StreamController<LocationEvent>? _eventController;
-  
-  Timer? _locationTimer;
-  GeoLocation? _lastKnownLocation;
-  List<GeofenceRegion> _geofences = [];
-  List<LocationEvent> _locationHistory = [];
+  // Google Places API key
+  static const String _googlePlacesApiKey = 'YOUR_GOOGLE_PLACES_API_KEY'; // Replace with actual key
+
+  final List<LocationEvent> _locationHistory = [];
+  final Set<GeofenceRegion> _activeGeofences = {};
+  final StreamController<LocationEvent> _locationEventController = StreamController.broadcast();
   
   bool _isTracking = false;
-  bool _backgroundTrackingEnabled = false;
+  bool _enableBackground = false;
+  GeoLocation? _currentLocation;
+  Timer? _trackingTimer;
 
-  Stream<GeoLocation>? get locationStream => _locationController?.stream;
-  Stream<LocationEvent>? get eventStream => _eventController?.stream;
+  // Stream for location events
+  Stream<LocationEvent> get locationEvents => _locationEventController.stream;
   
-  GeoLocation? get lastKnownLocation => _lastKnownLocation;
+  // Current location getter
+  GeoLocation? get currentLocation => _currentLocation;
   bool get isTracking => _isTracking;
 
-  // Initialize location service
-  Future<bool> initialize() async {
+  // POI Categories for quest generation
+  final Map<String, List<String>> _poiCategories = {
+    'fitness': ['gym', 'fitness_center', 'stadium', 'swimming_pool', 'sports_complex'],
+    'social': ['restaurant', 'bar', 'cafe', 'pub', 'night_club', 'community_center'],
+    'spiritual': ['church', 'mosque', 'synagogue', 'temple', 'place_of_worship'],
+    'nature': ['park', 'nature_reserve', 'botanical_garden', 'zoo', 'aquarium'],
+    'education': ['school', 'university', 'library', 'museum'],
+    'shopping': ['shopping_mall', 'store', 'supermarket', 'pharmacy'],
+    'transportation': ['subway_station', 'train_station', 'bus_station', 'airport'],
+    'medical': ['hospital', 'doctor', 'dentist', 'veterinary_care'],
+    'entertainment': ['movie_theater', 'amusement_park', 'bowling_alley', 'casino'],
+    'lodging': ['lodging', 'hotel', 'motel', 'resort'],
+  };
+
+  // Initialize the service
+  Future<void> initialize() async {
+    await _setupLocationServices();
+    print('Enhanced Location Service initialized');
+  }
+
+  // Setup location services and permissions
+  Future<void> _setupLocationServices() async {
     try {
-      // Check permissions
+      // Check location permissions
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          return false;
-        }
       }
 
       if (permission == LocationPermission.deniedForever) {
-        return false;
+        throw Exception('Location permissions are permanently denied');
       }
 
-      // Initialize streams
-      _locationController = StreamController<GeoLocation>.broadcast();
-      _eventController = StreamController<LocationEvent>.broadcast();
+      // Get initial location
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
+      );
 
-      // Load saved data
-      await _loadGeofences();
-      await _loadLocationHistory();
+      _currentLocation = GeoLocation(
+        id: 'current',
+        latitude: position.latitude,
+        longitude: position.longitude,
+        altitude: position.altitude,
+        accuracy: position.accuracy,
+        timestamp: DateTime.now(),
+      );
 
-      return true;
+      print('Initial location: ${_currentLocation!.latitude}, ${_currentLocation!.longitude}');
     } catch (e) {
-      print('Error initializing location service: $e');
-      return false;
+      print('Error setting up location services: $e');
+      rethrow;
     }
   }
 
@@ -203,50 +236,32 @@ class EnhancedLocationService {
   Future<void> startTracking({bool enableBackground = false}) async {
     if (_isTracking) return;
 
-    try {
-      _isTracking = true;
-      _backgroundTrackingEnabled = enableBackground;
+    _enableBackground = enableBackground;
+    _isTracking = true;
 
-      if (enableBackground) {
-        await _startBackgroundTracking();
-      } else {
-        await _startForegroundTracking();
-      }
-    } catch (e) {
-      print('Error starting location tracking: $e');
-      _isTracking = false;
+    if (enableBackground) {
+      await _startBackgroundTracking();
+    } else {
+      await _startForegroundTracking();
     }
+
+    print('Location tracking started (background: $enableBackground)');
   }
 
   // Stop location tracking
   Future<void> stopTracking() async {
     _isTracking = false;
-    _locationTimer?.cancel();
+    _trackingTimer?.cancel();
     
-    if (_backgroundTrackingEnabled) {
+    if (_enableBackground) {
       await BackgroundLocation.stopLocationService();
     }
   }
 
   // Start foreground tracking
   Future<void> _startForegroundTracking() async {
-    _locationTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      try {
-        final position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-        
-        final location = GeoLocation(
-          latitude: position.latitude,
-          longitude: position.longitude,
-          altitude: position.altitude,
-          accuracy: position.accuracy,
-        );
-
-        await _updateLocation(location);
-      } catch (e) {
-        print('Error getting location: $e');
-      }
+    _trackingTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      await _updateLocation();
     });
   }
 
@@ -254,96 +269,584 @@ class EnhancedLocationService {
   Future<void> _startBackgroundTracking() async {
     await BackgroundLocation.setAndroidNotification(
       title: 'Realm of Valor Adventure Mode',
-      message: 'Tracking your location for epic adventures!',
+      message: 'Tracking your location for quest adventures',
       icon: '@mipmap/ic_launcher',
     );
-
-    await BackgroundLocation.setAndroidConfiguration(1000);
+    
     await BackgroundLocation.startLocationService(distanceFilter: 20);
-
+    
     BackgroundLocation.getLocationUpdates((location) {
-      final geoLocation = GeoLocation(
-        latitude: location.latitude ?? 0.0,
-        longitude: location.longitude ?? 0.0,
-        altitude: location.altitude,
-        accuracy: location.accuracy,
-      );
-      
-      _updateLocation(geoLocation);
+      _handleBackgroundLocationUpdate(location);
     });
   }
 
-  // Update location and trigger events
-  Future<void> _updateLocation(GeoLocation location) async {
-    _lastKnownLocation = location;
-    _locationController?.add(location);
+  // Update current location
+  Future<void> _updateLocation() async {
+    try {
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 10,
+        ),
+      );
 
-    // Add to history
-    _locationHistory.add(LocationEvent(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      type: 'location_update',
-      location: location,
-      timestamp: DateTime.now(),
-      data: {},
-    ));
+      final newLocation = GeoLocation(
+        id: 'current_${DateTime.now().millisecondsSinceEpoch}',
+        latitude: position.latitude,
+        longitude: position.longitude,
+        altitude: position.altitude,
+        accuracy: position.accuracy,
+        timestamp: DateTime.now(),
+      );
 
-    // Limit history size
-    if (_locationHistory.length > 1000) {
-      _locationHistory = _locationHistory.sublist(_locationHistory.length - 1000);
-    }
+      _currentLocation = newLocation;
+      await _checkGeofenceRegions(newLocation);
+      await _triggerLocationBasedEvents(newLocation);
 
-    // Check geofences
-    await _checkGeofences(location);
-
-    // Save location history periodically
-    if (_locationHistory.length % 10 == 0) {
-      await _saveLocationHistory();
+    } catch (e) {
+      print('Error updating location: $e');
     }
   }
 
-  // Check geofences for triggers
-  Future<void> _checkGeofences(GeoLocation location) async {
-    for (final geofence in _geofences) {
-      if (!geofence.isActive) continue;
+  // Handle background location updates
+  void _handleBackgroundLocationUpdate(Location location) {
+    final newLocation = GeoLocation(
+      id: 'bg_${DateTime.now().millisecondsSinceEpoch}',
+      latitude: location.latitude ?? 0,
+      longitude: location.longitude ?? 0,
+      altitude: location.altitude,
+      accuracy: location.accuracy,
+      timestamp: DateTime.now(),
+    );
 
-      if (geofence.containsLocation(location)) {
-        final event = LocationEvent(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          type: geofence.eventType,
-          location: location,
-          timestamp: DateTime.now(),
-          data: {
-            'geofence_id': geofence.id,
-            'geofence_name': geofence.name,
-            ...geofence.data,
-          },
-        );
+    _currentLocation = newLocation;
+    _checkGeofenceRegions(newLocation);
+    _triggerLocationBasedEvents(newLocation);
+  }
 
-        _eventController?.add(event);
-      }
+  // Discover nearby POIs using Google Places API
+  Future<List<PointOfInterest>> discoverNearbyPOIs({
+    double radius = 1000.0,
+    String? category,
+    int maxResults = 20,
+  }) async {
+    if (_currentLocation == null) {
+      throw Exception('Current location not available');
     }
+
+    try {
+      // Build Google Places API request
+      String url = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json?'
+          'location=${_currentLocation!.latitude},${_currentLocation!.longitude}&'
+          'radius=$radius&'
+          'key=$_googlePlacesApiKey';
+
+      // Add category filter if specified
+      if (category != null && _poiCategories.containsKey(category)) {
+        final types = _poiCategories[category]!.join('|');
+        url += '&type=$types';
+      }
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data['status'] == 'OK') {
+          return _parseGooglePlacesResponse(data, category ?? 'general');
+        } else {
+          print('Google Places API error: ${data['status']}');
+          return _generateMockPOIs(category);
+        }
+      } else {
+        print('Google Places API request failed: ${response.statusCode}');
+        return _generateMockPOIs(category);
+      }
+    } catch (e) {
+      print('Error discovering POIs: $e');
+      return _generateMockPOIs(category);
+    }
+  }
+
+  // Parse Google Places API response
+  List<PointOfInterest> _parseGooglePlacesResponse(
+    Map<String, dynamic> data, 
+    String category
+  ) {
+    final results = data['results'] as List;
+    
+    return results.map<PointOfInterest>((place) {
+      final geometry = place['geometry']['location'];
+      final location = GeoLocation(
+        id: place['place_id'],
+        latitude: geometry['lat'].toDouble(),
+        longitude: geometry['lng'].toDouble(),
+        timestamp: DateTime.now(),
+      );
+
+      // Determine POI type from Google Places types
+      final types = (place['types'] as List).cast<String>();
+      final poiType = _determinePOIType(types);
+
+      return PointOfInterest(
+        id: place['place_id'],
+        name: place['name'] ?? 'Unknown Location',
+        description: _generatePOIDescription(poiType, place),
+        location: location,
+        type: poiType,
+        category: category,
+        rating: place['rating']?.toDouble() ?? 0.0,
+        isDiscovered: false,
+        discoveredAt: null,
+        questPotential: _calculateQuestPotential(poiType, place),
+        metadata: {
+          'google_place_id': place['place_id'],
+          'price_level': place['price_level'],
+          'user_ratings_total': place['user_ratings_total'],
+          'vicinity': place['vicinity'],
+          'types': types,
+          'photo_reference': place['photos']?.isNotEmpty == true 
+              ? place['photos'][0]['photo_reference'] 
+              : null,
+        },
+      );
+    }).toList();
+  }
+
+  // Determine POI type from Google Places types
+  POIType _determinePOIType(List<String> types) {
+    // Priority mapping for POI types
+    if (types.contains('gym') || types.contains('fitness_center')) {
+      return POIType.fitness;
+    }
+    if (types.contains('restaurant') || types.contains('cafe') || types.contains('bar')) {
+      return POIType.social;
+    }
+    if (types.contains('church') || types.contains('place_of_worship')) {
+      return POIType.spiritual;
+    }
+    if (types.contains('park') || types.contains('nature_reserve')) {
+      return POIType.nature;
+    }
+    if (types.contains('school') || types.contains('university') || types.contains('library')) {
+      return POIType.education;
+    }
+    if (types.contains('shopping_mall') || types.contains('store')) {
+      return POIType.shopping;
+    }
+    if (types.contains('hospital') || types.contains('doctor')) {
+      return POIType.medical;
+    }
+    if (types.contains('movie_theater') || types.contains('amusement_park')) {
+      return POIType.entertainment;
+    }
+    
+    return POIType.generic;
+  }
+
+  // Generate POI description based on type
+  String _generatePOIDescription(POIType type, Map<String, dynamic> place) {
+    final name = place['name'] ?? 'Unknown Location';
+    final vicinity = place['vicinity'] ?? '';
+    
+    switch (type) {
+      case POIType.fitness:
+        return 'Train your body and spirit at $name. Perfect for fitness quests and strength challenges.';
+      case POIType.social:
+        return 'Gather with fellow adventurers at $name. Social quests and community events await.';
+      case POIType.spiritual:
+        return 'Find inner peace and wisdom at $name. Meditation and holy quests can be discovered here.';
+      case POIType.nature:
+        return 'Explore the natural wonders of $name. Nature quests and exploration adventures begin here.';
+      case POIType.education:
+        return 'Expand your knowledge at $name. Learning quests and scholarly challenges await.';
+      case POIType.shopping:
+        return 'Discover treasures and trade at $name. Collection quests and trading opportunities available.';
+      case POIType.medical:
+        return 'Healing and restoration can be found at $name. Recovery quests and health challenges await.';
+      case POIType.entertainment:
+        return 'Fun and excitement await at $name. Entertainment quests and leisure activities available.';
+      default:
+        return 'Mysterious adventures await at $name in $vicinity.';
+    }
+  }
+
+  // Calculate quest potential based on POI characteristics
+  double _calculateQuestPotential(POIType type, Map<String, dynamic> place) {
+    double potential = 0.5; // Base potential
+    
+    // Rating affects potential
+    final rating = place['rating']?.toDouble() ?? 0.0;
+    if (rating > 0) {
+      potential += (rating / 5.0) * 0.3; // Max +0.3
+    }
+    
+    // User ratings count affects potential
+    final ratingsCount = place['user_ratings_total'] ?? 0;
+    if (ratingsCount > 100) {
+      potential += 0.2; // Popular places get bonus
+    }
+    
+    // Type-specific bonuses
+    switch (type) {
+      case POIType.fitness:
+      case POIType.nature:
+        potential += 0.2; // Adventure-friendly locations
+        break;
+      case POIType.social:
+      case POIType.entertainment:
+        potential += 0.15; // Good for social quests
+        break;
+      default:
+        break;
+    }
+    
+    return math.min(1.0, potential); // Cap at 1.0
+  }
+
+  // Generate location-specific quests based on POI type
+  Future<List<LocationQuest>> generateLocationQuests(PointOfInterest poi) async {
+    final quests = <LocationQuest>[];
+    
+    switch (poi.type) {
+      case POIType.fitness:
+        quests.addAll(_generateFitnessQuests(poi));
+        break;
+      case POIType.social:
+        quests.addAll(_generateSocialQuests(poi));
+        break;
+      case POIType.spiritual:
+        quests.addAll(_generateSpiritualQuests(poi));
+        break;
+      case POIType.nature:
+        quests.addAll(_generateNatureQuests(poi));
+        break;
+      case POIType.education:
+        quests.addAll(_generateEducationQuests(poi));
+        break;
+      case POIType.shopping:
+        quests.addAll(_generateShoppingQuests(poi));
+        break;
+      case POIType.medical:
+        quests.addAll(_generateMedicalQuests(poi));
+        break;
+      case POIType.entertainment:
+        quests.addAll(_generateEntertainmentQuests(poi));
+        break;
+      default:
+        quests.addAll(_generateGenericQuests(poi));
+        break;
+    }
+    
+    return quests;
+  }
+
+  // Generate fitness-specific quests
+  List<LocationQuest> _generateFitnessQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'fitness_${poi.id}_workout',
+        title: 'Warrior Training Session',
+        description: 'Complete a workout session at ${poi.name} to gain strength and endurance.',
+        location: poi,
+        questType: 'fitness',
+        difficulty: 'medium',
+        experienceReward: 300,
+        requirements: [
+          'Visit ${poi.name}',
+          'Spend 30 minutes training',
+          'Complete 3 different exercises',
+        ],
+        objectives: [
+          QuestObjective(
+            id: 'visit_gym',
+            description: 'Arrive at ${poi.name}',
+            type: 'location_visit',
+            targetValue: 1,
+          ),
+          QuestObjective(
+            id: 'workout_duration',
+            description: 'Train for 30 minutes',
+            type: 'time_spent',
+            targetValue: 1800, // 30 minutes in seconds
+          ),
+        ],
+      ),
+      LocationQuest(
+        id: 'fitness_${poi.id}_strength',
+        title: 'Forge of Power',
+        description: 'Test your might in the halls of strength at ${poi.name}.',
+        location: poi,
+        questType: 'fitness',
+        difficulty: 'hard',
+        experienceReward: 500,
+        requirements: [
+          'Demonstrate strength training',
+          'Complete endurance challenge',
+        ],
+      ),
+    ];
+  }
+
+  // Generate social-specific quests
+  List<LocationQuest> _generateSocialQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'social_${poi.id}_gathering',
+        title: 'Tavern Tales',
+        description: 'Share stories and forge friendships at ${poi.name}.',
+        location: poi,
+        questType: 'social',
+        difficulty: 'easy',
+        experienceReward: 200,
+        requirements: [
+          'Visit ${poi.name}',
+          'Interact with other patrons',
+          'Share a story or listen to tales',
+        ],
+      ),
+      LocationQuest(
+        id: 'social_${poi.id}_network',
+        title: 'Guild Recruitment',
+        description: 'Build your network of allies at ${poi.name}.',
+        location: poi,
+        questType: 'social',
+        difficulty: 'medium',
+        experienceReward: 350,
+        requirements: [
+          'Meet 3 new people',
+          'Exchange contact information',
+        ],
+      ),
+    ];
+  }
+
+  // Generate spiritual/meditation quests
+  List<LocationQuest> _generateSpiritualQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'spiritual_${poi.id}_meditation',
+        title: 'Sacred Contemplation',
+        description: 'Find inner peace and wisdom through meditation at ${poi.name}.',
+        location: poi,
+        questType: 'spiritual',
+        difficulty: 'easy',
+        experienceReward: 250,
+        requirements: [
+          'Visit ${poi.name}',
+          'Meditate for 15 minutes',
+          'Reflect on personal growth',
+        ],
+      ),
+      LocationQuest(
+        id: 'spiritual_${poi.id}_pilgrimage',
+        title: 'Pilgrimage of Understanding',
+        description: 'Embark on a spiritual journey at ${poi.name}.',
+        location: poi,
+        questType: 'spiritual',
+        difficulty: 'medium',
+        experienceReward: 400,
+        requirements: [
+          'Spend 1 hour in contemplation',
+          'Learn about the location\'s history',
+        ],
+      ),
+    ];
+  }
+
+  // Generate nature exploration quests
+  List<LocationQuest> _generateNatureQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'nature_${poi.id}_explore',
+        title: 'Nature\'s Secrets',
+        description: 'Discover the hidden wonders of ${poi.name}.',
+        location: poi,
+        questType: 'exploration',
+        difficulty: 'easy',
+        experienceReward: 300,
+        requirements: [
+          'Explore different areas of ${poi.name}',
+          'Take photos of interesting flora/fauna',
+          'Walk for at least 30 minutes',
+        ],
+      ),
+      LocationQuest(
+        id: 'nature_${poi.id}_treasure',
+        title: 'Geocache Hunter',
+        description: 'Search for hidden treasures in the natural sanctuary of ${poi.name}.',
+        location: poi,
+        questType: 'collection',
+        difficulty: 'medium',
+        experienceReward: 450,
+        requirements: [
+          'Search for 3 hidden locations',
+          'Document your discoveries',
+        ],
+      ),
+    ];
+  }
+
+  // Generate education quests
+  List<LocationQuest> _generateEducationQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'education_${poi.id}_learn',
+        title: 'Scholar\'s Quest',
+        description: 'Expand your knowledge at ${poi.name}.',
+        location: poi,
+        questType: 'education',
+        difficulty: 'medium',
+        experienceReward: 350,
+        requirements: [
+          'Visit ${poi.name}',
+          'Learn something new',
+          'Share your knowledge with others',
+        ],
+      ),
+    ];
+  }
+
+  // Generate shopping/collection quests
+  List<LocationQuest> _generateShoppingQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'shopping_${poi.id}_treasure',
+        title: 'Merchant\'s Mission',
+        description: 'Discover rare items and treasures at ${poi.name}.',
+        location: poi,
+        questType: 'collection',
+        difficulty: 'easy',
+        experienceReward: 200,
+        requirements: [
+          'Browse the merchant\'s wares',
+          'Find 3 interesting items',
+        ],
+      ),
+    ];
+  }
+
+  // Generate medical/healing quests
+  List<LocationQuest> _generateMedicalQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'medical_${poi.id}_wellness',
+        title: 'Temple of Healing',
+        description: 'Focus on health and wellness at ${poi.name}.',
+        location: poi,
+        questType: 'wellness',
+        difficulty: 'easy',
+        experienceReward: 250,
+        requirements: [
+          'Visit for health-related purpose',
+          'Practice self-care',
+        ],
+      ),
+    ];
+  }
+
+  // Generate entertainment quests
+  List<LocationQuest> _generateEntertainmentQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'entertainment_${poi.id}_fun',
+        title: 'Jester\'s Challenge',
+        description: 'Enjoy recreational activities at ${poi.name}.',
+        location: poi,
+        questType: 'entertainment',
+        difficulty: 'easy',
+        experienceReward: 200,
+        requirements: [
+          'Participate in an activity',
+          'Have fun for at least 1 hour',
+        ],
+      ),
+    ];
+  }
+
+  // Generate generic quests for unknown POI types
+  List<LocationQuest> _generateGenericQuests(PointOfInterest poi) {
+    return [
+      LocationQuest(
+        id: 'generic_${poi.id}_visit',
+        title: 'Unknown Territory',
+        description: 'Explore the mysteries of ${poi.name}.',
+        location: poi,
+        questType: 'exploration',
+        difficulty: 'easy',
+        experienceReward: 150,
+        requirements: [
+          'Visit ${poi.name}',
+          'Spend 15 minutes exploring',
+        ],
+      ),
+    ];
+  }
+
+  // Generate mock POIs for fallback when API fails
+  List<PointOfInterest> _generateMockPOIs(String? category) {
+    if (_currentLocation == null) return [];
+
+    final mockPOIs = <PointOfInterest>[];
+    final random = math.Random();
+
+    // Generate a few mock POIs around current location
+    for (int i = 0; i < 5; i++) {
+      final distance = 200 + random.nextDouble() * 800; // 200-1000m away
+      final angle = random.nextDouble() * 2 * math.pi;
+      
+      final lat = _currentLocation!.latitude + (distance * math.cos(angle)) / 111000;
+      final lng = _currentLocation!.longitude + (distance * math.sin(angle)) / (111000 * math.cos(_currentLocation!.latitude * math.pi / 180));
+
+      final types = [POIType.fitness, POIType.social, POIType.nature, POIType.entertainment, POIType.shopping];
+      final type = types[random.nextInt(types.length)];
+
+      mockPOIs.add(PointOfInterest(
+        id: 'mock_poi_${i + 1}',
+        name: 'Mock ${type.name.capitalized} Location ${i + 1}',
+        description: 'A simulated location for testing purposes.',
+        location: GeoLocation(
+          id: 'mock_location_${i + 1}',
+          latitude: lat,
+          longitude: lng,
+          timestamp: DateTime.now(),
+        ),
+        type: type,
+        category: category ?? 'general',
+        rating: 3.0 + random.nextDouble() * 2.0, // 3.0-5.0 rating
+        isDiscovered: false,
+        discoveredAt: null,
+        questPotential: 0.5 + random.nextDouble() * 0.5, // 0.5-1.0 potential
+        metadata: {
+          'is_mock': true,
+          'created_at': DateTime.now().toIso8601String(),
+        },
+      ));
+    }
+
+    return mockPOIs;
   }
 
   // Add geofence region
   Future<void> addGeofence(GeofenceRegion geofence) async {
-    _geofences.add(geofence);
+    _activeGeofences.add(geofence);
     await _saveGeofences();
   }
 
   // Remove geofence
   Future<void> removeGeofence(String geofenceId) async {
-    _geofences.removeWhere((g) => g.id == geofenceId);
+    _activeGeofences.removeWhere((g) => g.id == geofenceId);
     await _saveGeofences();
   }
 
   // Create geofences for POIs
-  Future<void> createGeofencesForPOIs(List<POI> pois) async {
+  Future<void> createGeofencesForPOIs(List<PointOfInterest> pois) async {
     for (final poi in pois) {
       final geofence = GeofenceRegion(
         id: 'poi_${poi.id}',
         name: poi.name,
         center: poi.location,
-        radius: poi.radius,
+        radius: 100, // Small radius for POIs
         eventType: 'poi_entered',
         data: {
           'poi_id': poi.id,
@@ -379,23 +882,23 @@ class EnhancedLocationService {
   }
 
   // Get nearby POIs
-  Future<List<POI>> getNearbyPOIs(GeoLocation location, {double radius = 1000}) async {
+  Future<List<PointOfInterest>> getNearbyPOIs(GeoLocation location, {double radius = 1000}) async {
     // This would typically query a backend service
     // For now, returning sample POIs
     return _generateSamplePOIs(location, radius);
   }
 
   // Generate sample POIs for demonstration
-  List<POI> _generateSamplePOIs(GeoLocation center, double radius) {
-    final pois = <POI>[];
+  List<PointOfInterest> _generateSamplePOIs(GeoLocation center, double radius) {
+    final pois = <PointOfInterest>[];
     final random = math.Random();
 
     final poiTypes = [
-      LocationType.park,
-      LocationType.gym,
-      LocationType.restaurant,
-      LocationType.monument,
-      LocationType.library,
+      POIType.park,
+      POIType.gym,
+      POIType.restaurant,
+      POIType.monument,
+      POIType.library,
     ];
 
     for (int i = 0; i < 10; i++) {
@@ -405,12 +908,18 @@ class EnhancedLocationService {
       final lat = center.latitude + (distance * math.cos(angle)) / 111000;
       final lng = center.longitude + (distance * math.sin(angle)) / (111000 * math.cos(center.latitude * math.pi / 180));
 
-      final poi = POI(
+      final poi = PointOfInterest(
+        id: 'sample_poi_${i + 1}',
         name: 'Adventure Point ${i + 1}',
         description: 'A mysterious location waiting to be explored',
-        type: poiTypes[random.nextInt(poiTypes.length)],
         location: GeoLocation(latitude: lat, longitude: lng),
-        radius: 50 + random.nextDouble() * 100,
+        type: poiTypes[random.nextInt(poiTypes.length)],
+        category: 'generic',
+        rating: 0.0,
+        isDiscovered: false,
+        discoveredAt: null,
+        questPotential: 0.5,
+        metadata: {},
       );
 
       pois.add(poi);
@@ -530,7 +1039,7 @@ class EnhancedLocationService {
   Future<void> _saveGeofences() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final geofenceJson = jsonEncode(_geofences.map((g) => g.toJson()).toList());
+      final geofenceJson = jsonEncode(_activeGeofences.map((g) => g.toJson()).toList());
       await prefs.setString('geofences', geofenceJson);
     } catch (e) {
       print('Error saving geofences: $e');
@@ -544,9 +1053,9 @@ class EnhancedLocationService {
       
       if (geofenceJson != null) {
         final geofenceList = jsonDecode(geofenceJson) as List;
-        _geofences = geofenceList
+        _activeGeofences.addAll(geofenceList
             .map((json) => GeofenceRegion.fromJson(json))
-            .toList();
+            .toList());
       }
     } catch (e) {
       print('Error loading geofences: $e');
@@ -579,10 +1088,64 @@ class EnhancedLocationService {
     }
   }
 
+  // Check geofences for triggers
+  Future<void> _checkGeofenceRegions(GeoLocation location) async {
+    for (final geofence in _activeGeofences) {
+      if (!geofence.isActive) continue;
+
+      if (geofence.containsLocation(location)) {
+        final event = LocationEvent(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: geofence.eventType,
+          location: location,
+          timestamp: DateTime.now(),
+          data: {
+            'geofence_id': geofence.id,
+            'geofence_name': geofence.name,
+            ...geofence.data,
+          },
+        );
+
+        _locationEventController.add(event);
+      }
+    }
+  }
+
+  // Trigger location-based events (e.g., quest generation)
+  Future<void> _triggerLocationBasedEvents(GeoLocation location) async {
+    if (_currentLocation == null) return;
+
+    final nearbyPOIs = await discoverNearbyPOIs(radius: 1000);
+    final discoveredPOIs = nearbyPOIs.where((poi) => poi.isDiscovered == false).toList();
+
+    for (final poi in discoveredPOIs) {
+      final quests = await generateLocationQuests(poi);
+      for (final quest in quests) {
+        final event = LocationEvent(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          type: 'quest_discovered',
+          location: location,
+          timestamp: DateTime.now(),
+          data: {
+            'quest_id': quest.id,
+            'quest_title': quest.title,
+            'quest_type': quest.questType,
+            'quest_difficulty': quest.difficulty,
+            'quest_experience_reward': quest.experienceReward,
+            'quest_location_id': poi.id,
+            'quest_location_name': poi.name,
+          },
+        );
+        _locationEventController.add(event);
+      }
+      poi.isDiscovered = true;
+      poi.discoveredAt = DateTime.now();
+    }
+  }
+
   // Cleanup
   void dispose() {
     stopTracking();
-    _locationController?.close();
-    _eventController?.close();
+    _locationEventController.close();
   }
 }
