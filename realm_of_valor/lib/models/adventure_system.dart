@@ -35,6 +35,18 @@ enum LocationType {
   other,
 }
 
+enum POIType {
+  fitness,
+  social,
+  spiritual,
+  nature,
+  education,
+  shopping,
+  medical,
+  entertainment,
+  generic,
+}
+
 enum SpawnType {
   common,
   uncommon,
@@ -50,6 +62,7 @@ enum SpawnType {
 
 @JsonSerializable()
 class GeoLocation {
+  final String? id;
   final double latitude;
   final double longitude;
   final double? altitude;
@@ -57,6 +70,7 @@ class GeoLocation {
   final DateTime timestamp;
 
   GeoLocation({
+    this.id,
     required this.latitude,
     required this.longitude,
     this.altitude,
@@ -379,6 +393,284 @@ class POI {
       lastVisited: lastVisited ?? this.lastVisited,
     );
   }
+}
+
+@JsonSerializable()
+class PointOfInterest {
+  final String id;
+  final String name;
+  final String description;
+  final GeoLocation location;
+  final POIType type;
+  final String category;
+  final double rating;
+  bool isDiscovered;
+  DateTime? discoveredAt;
+  final double questPotential;
+  final Map<String, dynamic> metadata;
+
+  PointOfInterest({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.location,
+    required this.type,
+    required this.category,
+    required this.rating,
+    required this.isDiscovered,
+    required this.discoveredAt,
+    required this.questPotential,
+    required this.metadata,
+  });
+
+  factory PointOfInterest.fromJson(Map<String, dynamic> json) =>
+      _$PointOfInterestFromJson(json);
+  Map<String, dynamic> toJson() => _$PointOfInterestToJson(this);
+}
+
+@JsonSerializable()
+class LocationQuest {
+  final String id;
+  final String title;
+  final String description;
+  final PointOfInterest location;
+  final String questType;
+  final String difficulty;
+  final int experienceReward;
+  final List<String> requirements;
+  final List<QuestObjective>? objectives;
+
+  LocationQuest({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.location,
+    required this.questType,
+    required this.difficulty,
+    required this.experienceReward,
+    required this.requirements,
+    this.objectives,
+  });
+
+  factory LocationQuest.fromJson(Map<String, dynamic> json) =>
+      _$LocationQuestFromJson(json);
+  Map<String, dynamic> toJson() => _$LocationQuestToJson(this);
+}
+
+@JsonSerializable()
+class StravaSegment {
+  final String id;
+  final String name;
+  final String activityType;
+  final double distance;
+  final double averageGrade;
+  final double maximumGrade;
+  final double elevationHigh;
+  final double elevationLow;
+  final double startLatitude;
+  final double startLongitude;
+  final double endLatitude;
+  final double endLongitude;
+  final int climbCategory;
+  final String city;
+  final String state;
+  final String country;
+  final bool hazardous;
+  final int starCount;
+  final int effortCount;
+  final String polyline;
+  final SegmentLeaderboard kom;
+  final SegmentLeaderboard qom;
+
+  StravaSegment({
+    required this.id,
+    required this.name,
+    required this.activityType,
+    required this.distance,
+    required this.averageGrade,
+    required this.maximumGrade,
+    required this.elevationHigh,
+    required this.elevationLow,
+    required this.startLatitude,
+    required this.startLongitude,
+    required this.endLatitude,
+    required this.endLongitude,
+    required this.climbCategory,
+    required this.city,
+    required this.state,
+    required this.country,
+    required this.hazardous,
+    required this.starCount,
+    required this.effortCount,
+    required this.polyline,
+    required this.kom,
+    required this.qom,
+  });
+
+  factory StravaSegment.fromJson(Map<String, dynamic> json) =>
+      _$StravaSegmentFromJson(json);
+  Map<String, dynamic> toJson() => _$StravaSegmentToJson(this);
+}
+
+@JsonSerializable()
+class SegmentLeaderboard {
+  final String athleteName;
+  final int elapsedTime;
+  final DateTime dateAchieved;
+
+  SegmentLeaderboard({
+    required this.athleteName,
+    required this.elapsedTime,
+    required this.dateAchieved,
+  });
+
+  factory SegmentLeaderboard.fromJson(Map<String, dynamic> json) =>
+      _$SegmentLeaderboardFromJson(json);
+  Map<String, dynamic> toJson() => _$SegmentLeaderboardToJson(this);
+}
+
+@JsonSerializable()
+class StravaRoute {
+  final String id;
+  final String name;
+  final String description;
+  final double distance;
+  final double elevationGain;
+  final String type;
+  final String surfaceType;
+  final List<GeoLocation> waypoints;
+  final bool isPrivate;
+  final int starCount;
+  final StravaAthlete? athlete;
+  final int? estimatedMovingTime;
+  final String? polyline;
+
+  StravaRoute({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.distance,
+    required this.elevationGain,
+    required this.type,
+    required this.surfaceType,
+    required this.waypoints,
+    required this.isPrivate,
+    required this.starCount,
+    this.athlete,
+    this.estimatedMovingTime,
+    this.polyline,
+  });
+
+  factory StravaRoute.fromJson(Map<String, dynamic> json) =>
+      _$StravaRouteFromJson(json);
+  Map<String, dynamic> toJson() => _$StravaRouteToJson(this);
+}
+
+@JsonSerializable()
+class StravaAthlete {
+  final String id;
+  final String firstName;
+  final String lastName;
+  final String? profileMedium;
+
+  StravaAthlete({
+    required this.id,
+    required this.firstName,
+    required this.lastName,
+    this.profileMedium,
+  });
+
+  factory StravaAthlete.fromJson(Map<String, dynamic> json) =>
+      _$StravaAthleteFromJson(json);
+  Map<String, dynamic> toJson() => _$StravaAthleteToJson(this);
+}
+
+@JsonSerializable()
+class TrailQuest {
+  final String id;
+  final String title;
+  final String description;
+  final String segmentId;
+  final String segmentName;
+  final double distance;
+  final double elevationGain;
+  final double averageGrade;
+  final String difficulty;
+  final String questType;
+  final GeoLocation startLocation;
+  final GeoLocation endLocation;
+  final String polyline;
+  final int experienceReward;
+  final List<QuestObjective> objectives;
+  final List<String> rewards;
+  final SegmentLeaderboard kom;
+  final SegmentLeaderboard qom;
+  final int effortCount;
+  final int starCount;
+  final bool isHazardous;
+  final int climbCategory;
+
+  TrailQuest({
+    required this.id,
+    required this.title,
+    required this.description,
+    required this.segmentId,
+    required this.segmentName,
+    required this.distance,
+    required this.elevationGain,
+    required this.averageGrade,
+    required this.difficulty,
+    required this.questType,
+    required this.startLocation,
+    required this.endLocation,
+    required this.polyline,
+    required this.experienceReward,
+    required this.objectives,
+    required this.rewards,
+    required this.kom,
+    required this.qom,
+    required this.effortCount,
+    required this.starCount,
+    required this.isHazardous,
+    required this.climbCategory,
+  });
+
+  factory TrailQuest.fromJson(Map<String, dynamic> json) =>
+      _$TrailQuestFromJson(json);
+  Map<String, dynamic> toJson() => _$TrailQuestToJson(this);
+}
+
+@JsonSerializable()
+class ActivityReward {
+  final String id;
+  final String activityId;
+  final String activityName;
+  final String activityType;
+  final int experienceGained;
+  final int goldGained;
+  final List<String> itemsEarned;
+  final double distanceCovered;
+  final int caloriesBurned;
+  final List<String> achievementsUnlocked;
+  final DateTime completedAt;
+
+  ActivityReward({
+    required this.id,
+    required this.activityId,
+    required this.activityName,
+    required this.activityType,
+    required this.experienceGained,
+    required this.goldGained,
+    required this.itemsEarned,
+    required this.distanceCovered,
+    required this.caloriesBurned,
+    required this.achievementsUnlocked,
+    required this.completedAt,
+  });
+
+  factory ActivityReward.fromJson(Map<String, dynamic> json) =>
+      _$ActivityRewardFromJson(json);
+  Map<String, dynamic> toJson() => _$ActivityRewardToJson(this);
 }
 
 class AdventureSystem {
