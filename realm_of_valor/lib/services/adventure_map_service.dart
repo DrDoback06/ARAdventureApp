@@ -6,6 +6,8 @@ import '../services/quest_generator_service.dart';
 import '../services/location_service.dart';
 import '../services/weather_service.dart';
 import '../services/encounter_service.dart';
+import '../models/adventure_system.dart' as adv;
+import 'poi_service.dart';
 
 class AdventureMapService extends ChangeNotifier {
   static final AdventureMapService _instance = AdventureMapService._internal();
@@ -37,17 +39,34 @@ class AdventureMapService extends ChangeNotifier {
     // Get current location
     await updateUserLocation();
     
-    // Generate initial quests
+    // Generate initial quests (POI-aware)
     await generateQuests();
     
     // Start location tracking
     _locationService.startLocationUpdates((location) {
       _currentUserLocation = location;
       _updateQuestDistances();
+      _maybeRegenerateQuestsOnMove(location);
       notifyListeners();
     });
     
     debugPrint('[AdventureMapService] Initialized successfully');
+  }
+
+  // When user moves significantly or enters a new area, regenerate quests based on nearby POIs
+  void _maybeRegenerateQuestsOnMove(UserLocation newLoc) {
+    if (_quests.isEmpty) {
+      generateQuests();
+      return;
+    }
+    final last = _currentUserLocation;
+    if (last == null) return;
+    final movedMeters = _calculateDistance(last.latitude, last.longitude, newLoc.latitude, newLoc.longitude);
+    const thresholdMeters = 250.0; // Configurable threshold
+    if (movedMeters >= thresholdMeters) {
+      debugPrint('[AdventureMapService] Significant move detected (${movedMeters.toStringAsFixed(1)}m) -> regenerating quests');
+      generateQuests();
+    }
   }
 
   // Update user location
@@ -109,7 +128,7 @@ class AdventureMapService extends ChangeNotifier {
       
       debugPrint('[AdventureMapService] Generated ${_quests.length} quests');
       for (int i = 0; i < _quests.length; i++) {
-        debugPrint('[AdventureMapService] Quest $i: ${_quests[i].title} at ${_quests[i].location}');
+        debugPrint('[AdventureMapService] Quest $i: ${_quests[i].title} at ${_quests[i].location} poiType=${_quests[i].poiType ?? 'n/a'}');
       }
       
       // Update quest distances
@@ -144,18 +163,15 @@ class AdventureMapService extends ChangeNotifier {
   void _updateQuestDistances() {
     if (_currentUserLocation == null) return;
 
-    for (final quest in _quests) {
-      // Calculate distance from current location to quest location
+    for (var i = 0; i < _quests.length; i++) {
+      final quest = _quests[i];
       final distance = _calculateDistance(
         _currentUserLocation!.latitude,
         _currentUserLocation!.longitude,
         quest.location.latitude,
         quest.location.longitude,
       );
-      
-      // Store distance in quest metadata (if available)
-      // Note: The current AdventureQuest model doesn't have a distance field
-      // This would need to be added to the model or stored separately
+      _quests[i] = quest.copyWith(distanceToPlayer: distance);
     }
   }
 
