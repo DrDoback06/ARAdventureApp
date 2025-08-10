@@ -8,6 +8,11 @@ import '../config/api_config.dart';
 import 'dungeon_master_service.dart';
 import '../services/location_service.dart';
 import '../services/weather_service.dart';
+import 'package:collection/collection.dart';
+import '../models/adventure_system.dart' as adv;
+import 'poi_service.dart';
+import 'enhanced_map_service.dart';
+import '../models/quest_type_model.dart' as qt;
 
 class QuestGeneratorService extends ChangeNotifier {
   static final QuestGeneratorService _instance = QuestGeneratorService._internal();
@@ -36,10 +41,13 @@ class QuestGeneratorService extends ChangeNotifier {
     final numQuests = 5 + _random.nextInt(5); // 5-10 quests
     debugPrint('[QuestGeneratorService] Will generate $numQuests base quests');
 
+    // First, try to create POI-based quests
+    quests.addAll(await _generatePOIQuests(location, radius));
+
+    // Then fill the rest with legacy/random quests to ensure variety
     for (int i = 0; i < numQuests; i++) {
       final questLocation = _generateRandomLocation(location, radius);
       final difficulty = _calculateDifficulty(QuestType.exploration);
-      
       quests.add(AdventureQuest(
         id: 'quest_${DateTime.now().millisecondsSinceEpoch}_$i',
         title: _generateExplorationTitle(),
@@ -888,6 +896,133 @@ class QuestGeneratorService extends ChangeNotifier {
     );
   }
 
+  Future<List<AdventureQuest>> _generatePOIQuests(UserLocation location, double radiusKm) async {
+    final results = <AdventureQuest>[];
+    try {
+      final geo = adv.GeoLocation(latitude: location.latitude, longitude: location.longitude);
+      final pois = await POIService().fetchNearbyPOIs(geo, radiusMeters: radiusKm * 1000, limit: 40);
+      if (pois.isEmpty) return results;
+
+      final currentWeather = await WeatherService().getCurrentWeather(location);
+      final hour = DateTime.now().hour;
+      final timeOfDay = hour < 6
+          ? TimeOfDay.night
+          : hour < 12
+              ? TimeOfDay.morning
+              : hour < 18
+                  ? TimeOfDay.afternoon
+                  : TimeOfDay.evening;
+
+      for (final poi in pois.take(12)) {
+        final enhancement = EnhancedMapService.getEnhancementForAdvLocationType(poi.type);
+        final questSubtype = enhancement.questTypes.isNotEmpty ? enhancement.questTypes.first : 'exploration';
+        final questType = _mapQuestSubtypeToQuestType(questSubtype);
+        final difficulty = _calculateDifficulty(questType);
+        final center = LatLng(poi.location.latitude, poi.location.longitude);
+
+        // Bias title/description by enhancement
+        final title = _generatePOIQuestTitle(enhancement.fantasyName, questSubtype);
+        final description = _generatePOIQuestDescription(enhancement.description, questSubtype);
+
+        final quest = AdventureQuest(
+          id: 'poi_${poi.id}',
+          title: title,
+          description: description,
+          type: questType,
+          difficulty: difficulty,
+          location: center,
+          radius: 80.0,
+          rewardXP: (_calculateRewardXP(difficulty) * WeatherService().getWeatherBonus(_mapLocalToModelQuestType(questType))).toInt(),
+          rewardGold: _calculateRewardGold(difficulty),
+          rewards: _generateRewards(difficulty),
+          expirationTime: DateTime.now().add(const Duration(hours: 3)),
+          requiredWeather: currentWeather.condition,
+          requiredTime: timeOfDay,
+          isActive: false,
+          isCompleted: false,
+        ).copyWith(
+          poiType: poi.type.toString().split('.').last,
+          distanceToPlayer: LocationService.calculateDistance(
+            location,
+            UserLocation(
+              userId: 'player',
+              latitude: poi.location.latitude,
+              longitude: poi.location.longitude,
+              accuracy: 0,
+              timestamp: DateTime.now(),
+            ),
+          ),
+          poiQuestSubtype: questSubtype,
+        );
+
+        results.add(quest);
+      }
+    } catch (e) {
+      debugPrint('[QuestGeneratorService] POI generation failed: $e');
+    }
+    return results;
+  }
+
+  qt.QuestType _mapLocalToModelQuestType(QuestType type) {
+    switch (type) {
+      case QuestType.exploration:
+        return qt.QuestType.exploration;
+      case QuestType.fitness:
+        return qt.QuestType.fitness;
+      case QuestType.collection:
+        return qt.QuestType.collection;
+      case QuestType.social:
+        return qt.QuestType.social;
+      case QuestType.battle:
+        return qt.QuestType.battle;
+      case QuestType.walking:
+      case QuestType.running:
+      case QuestType.climbing:
+      case QuestType.location:
+      case QuestType.time:
+      case QuestType.weather:
+        return qt.QuestType.exploration;
+    }
+  }
+
+  QuestType _mapQuestSubtypeToQuestType(String subtype) {
+    switch (subtype) {
+      case 'recipe_collection':
+      case 'feast_preparation':
+        return QuestType.collection;
+      case 'tale_gathering':
+        return QuestType.social;
+      case 'strength_trials':
+      case 'endurance_challenges':
+      case 'skill_mastery':
+        return QuestType.fitness;
+      case 'knowledge_seeking':
+      case 'puzzle_solving':
+      case 'lore_research':
+      case 'wisdom_trials':
+      case 'spell_learning':
+        return QuestType.exploration;
+      case 'healing_pilgrimage':
+      case 'comfort_giving':
+      case 'life_protection':
+        return QuestType.social;
+      case 'nature_communion':
+      case 'herb_gathering':
+      case 'animal_friendship':
+        return QuestType.exploration;
+      default:
+        return QuestType.exploration;
+    }
+  }
+
+  String _generatePOIQuestTitle(String fantasyName, String subtype) {
+    return '$fantasyName: ${subtype.replaceAll('_', ' ').split(' ').map((w) => w[0].toUpperCase() + w.substring(1)).join(' ')}';
+  }
+
+  String _generatePOIQuestDescription(String base, String subtype) {
+    return '$base. Task: ${subtype.replaceAll('_', ' ')}.';
+  }
+
   // Enhanced Features
 
   // Check nearby quests
@@ -990,6 +1125,9 @@ class AdventureQuest {
   final DateTime? expirationTime;
   final WeatherCondition? requiredWeather;
   final TimeOfDay? requiredTime;
+  final double? distanceToPlayer;
+  final String? poiType; // e.g., park, restaurant
+  final String? poiQuestSubtype; // e.g., recipe_collection
   bool isActive;
   bool isCompleted;
 
@@ -1007,9 +1145,54 @@ class AdventureQuest {
     this.expirationTime,
     this.requiredWeather,
     this.requiredTime,
+    this.distanceToPlayer,
+    this.poiType,
+    this.poiQuestSubtype,
     this.isActive = false,
     this.isCompleted = false,
   });
+
+  AdventureQuest copyWith({
+    String? id,
+    String? title,
+    String? description,
+    QuestType? type,
+    QuestDifficulty? difficulty,
+    LatLng? location,
+    double? radius,
+    int? rewardXP,
+    int? rewardGold,
+    List<QuestReward>? rewards,
+    DateTime? expirationTime,
+    WeatherCondition? requiredWeather,
+    TimeOfDay? requiredTime,
+    bool? isActive,
+    bool? isCompleted,
+    double? distanceToPlayer,
+    String? poiType,
+    String? poiQuestSubtype,
+  }) {
+    return AdventureQuest(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      type: type ?? this.type,
+      difficulty: difficulty ?? this.difficulty,
+      location: location ?? this.location,
+      radius: radius ?? this.radius,
+      rewardXP: rewardXP ?? this.rewardXP,
+      rewardGold: rewardGold ?? this.rewardGold,
+      rewards: rewards ?? this.rewards,
+      expirationTime: expirationTime ?? this.expirationTime,
+      requiredWeather: requiredWeather ?? this.requiredWeather,
+      requiredTime: requiredTime ?? this.requiredTime,
+      isActive: isActive ?? this.isActive,
+      isCompleted: isCompleted ?? this.isCompleted,
+      distanceToPlayer: distanceToPlayer ?? this.distanceToPlayer,
+      poiType: poiType ?? this.poiType,
+      poiQuestSubtype: poiQuestSubtype ?? this.poiQuestSubtype,
+    );
+  }
 }
 
 enum QuestType {

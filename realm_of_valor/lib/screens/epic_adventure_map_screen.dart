@@ -228,7 +228,10 @@ class _EpicAdventureMapScreenState extends State<EpicAdventureMapScreen>
           onTap: () => _showQuestDetails(quest),
           infoWindow: InfoWindow(
             title: quest.title,
-            snippet: quest.description,
+            snippet: [
+              if (quest.poiType != null) 'POI: ${quest.poiType}',
+              if (quest.distanceToPlayer != null) '${quest.distanceToPlayer!.toStringAsFixed(0)}m away',
+            ].where((e) => e.isNotEmpty).join(' • '),
           ),
         ),
       );

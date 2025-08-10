@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import '../models/adventure_system.dart' as adv;
 
 /// Enhanced Map Service with Immersive Fantasy Overlays
 /// Transforms real-world maps into magical adventure landscapes
@@ -334,6 +335,28 @@ class EnhancedMapService {
   static LocationEnhancement _getLocationEnhancement(String locationType) {
     return _locationEnhancements[locationType] ?? 
            _locationEnhancements['park']!; // Default fallback
+  }
+
+  static LocationEnhancement getEnhancementForAdvLocationType(adv.LocationType type) {
+    final key = _mapAdvLocationTypeToKey(type);
+    return _locationEnhancements[key] ?? _locationEnhancements['park']!;
+  }
+
+  static String _mapAdvLocationTypeToKey(adv.LocationType type) {
+    switch (type) {
+      case adv.LocationType.park:
+        return 'park';
+      case adv.LocationType.gym:
+        return 'gym';
+      case adv.LocationType.restaurant:
+        return 'restaurant';
+      case adv.LocationType.library:
+        return 'library';
+      case adv.LocationType.school:
+        return 'school';
+      default:
+        return 'park';
+    }
   }
 
   static BitmapDescriptor _createFantasyMarkerIcon(LocationEnhancement enhancement) {
